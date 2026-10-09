@@ -1,0 +1,9 @@
+{
+  "name": "SubspaceTransport",
+  "version_number": "0.1.0",
+  "website_url": "https://github.com/realparmesan/dsp-subspace-transport",
+  "description": "A starter BepInEx plugin framework for Dyson Sphere Program.",
+  "dependencies": [
+    "xiaoye97-BepInEx-5.4.17"
+  ]
+}
