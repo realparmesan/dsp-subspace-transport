@@ -7,10 +7,13 @@
     <DSPGameDir Condition="'$(DSPGameDir)' == ''">$(DSP_GAME_DIR)</DSPGameDir>
     <DSPBepInExDir Condition="'$(DSPBepInExDir)' == '' and '$(DSP_BEPINEX_DIR)' != ''">$(DSP_BEPINEX_DIR)</DSPBepInExDir>
     <DSPBepInExDir Condition="'$(DSPBepInExDir)' == ''">$(DSPGameDir)/BepInEx</DSPBepInExDir>
+    <DSPLdbToolDir Condition="'$(DSPLdbToolDir)' == '' and '$(DSP_LDBTOOL_DIR)' != ''">$(DSP_LDBTOOL_DIR)</DSPLdbToolDir>
+    <DSPLdbToolDir Condition="'$(DSPLdbToolDir)' == ''">$(DSPBepInExDir)/plugins/LDBTool</DSPLdbToolDir>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="DysonSphereProgram.Modding.DSPModSave" Version="1.2.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -22,12 +25,20 @@
       <HintPath>$(DSPBepInExDir)/core/0Harmony.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="LDBTool">
+      <HintPath>$(DSPLdbToolDir)/LDBTool.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Assembly-CSharp">
       <HintPath>$(DSPGameDir)/DSP_Data/Managed/Assembly-CSharp.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>$(DSPGameDir)/DSP_Data/Managed/UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(DSPGameDir)/DSP_Data/Managed/UnityEngine.UI.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
@@ -37,6 +48,8 @@
     <Error Condition="!Exists('$(DSPGameDir)/DSP_Data/Managed/Assembly-CSharp.dll')" Text="DSP game assemblies not found. Check DSP_GAME_DIR: $(DSPGameDir)" />
     <Error Condition="!Exists('$(DSPBepInExDir)/core/BepInEx.dll')" Text="BepInEx not found. Set DSP_BEPINEX_DIR to the BepInEx folder containing core/." />
     <Error Condition="!Exists('$(DSPBepInExDir)/core/0Harmony.dll')" Text="Harmony not found under $(DSPBepInExDir)/core." />
+    <Error Condition="!Exists('$(DSPLdbToolDir)/LDBTool.dll')" Text="LDBTool not found. Set DSP_LDBTOOL_DIR to the folder containing LDBTool.dll." />
     <Error Condition="!Exists('$(DSPGameDir)/DSP_Data/Managed/UnityEngine.CoreModule.dll')" Text="Unity assemblies not found under $(DSPGameDir)/DSP_Data/Managed." />
+    <Error Condition="!Exists('$(DSPGameDir)/DSP_Data/Managed/UnityEngine.UI.dll')" Text="Unity UI assembly not found under $(DSPGameDir)/DSP_Data/Managed." />
   </Target>
 </Project>

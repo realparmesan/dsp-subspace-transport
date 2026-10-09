@@ -1,9 +1,11 @@
 {
   "name": "SubspaceTransport",
-  "version_number": "0.1.0",
+  "version_number": "0.3.0",
   "website_url": "https://github.com/realparmesan/dsp-subspace-transport",
-  "description": "A starter BepInEx plugin framework for Dyson Sphere Program.",
+  "description": "Instantly transport cargo between interstellar stations with Subspace Logistics research.",
   "dependencies": [
-    "xiaoye97-BepInEx-5.4.17"
+    "xiaoye97-BepInEx-5.4.17",
+    "xiaoye97-LDBTool-3.0.3",
+    "CommonAPI-DSPModSave-1.1.0"
   ]
 }
