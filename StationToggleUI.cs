@@ -10,6 +10,7 @@ namespace SubspaceTransport
         private static void Postfix()
         {
             StationToggleUI.Initialize();
+            BatterySphereSiloUI.Initialize();
         }
     }
 
@@ -48,7 +49,7 @@ namespace SubspaceTransport
             {
                 if (!_initializationWarningLogged)
                 {
-                    Plugin.Log.LogWarning("Could not initialize the Subspace Logistics station toggle yet.");
+                    Plugin.ModLogger.LogWarning("Could not initialize the Wormhole Logistics station toggle yet.");
                     _initializationWarningLogged = true;
                 }
 
@@ -80,7 +81,7 @@ namespace SubspaceTransport
                 Object.Destroy(buttonObject);
                 _button = null;
                 _buttonText = null;
-                Plugin.Log.LogError("The station toggle button template is missing its button or text component.");
+                Plugin.ModLogger.LogError("The station toggle button template is missing its button or text component.");
                 return;
             }
 
@@ -98,7 +99,7 @@ namespace SubspaceTransport
             rect.sizeDelta = new Vector2(104f, 22f);
             rect.anchoredPosition = new Vector2(414f, -60f);
 
-            _button.tips.tipTitle = "Subspace Logistics";
+            _button.tips.tipTitle = "Wormhole Logistics";
             _button.tips.tipText = "Enable instant transfers at this station. Both endpoint stations must be enabled.";
             _button.onClick -= OnToggleClicked;
             _button.onClick += OnToggleClicked;
@@ -129,7 +130,7 @@ namespace SubspaceTransport
             }
 
             bool enabled = StationSettings.IsEnabled(station);
-            string label = enabled ? "Subspace: ON" : "Subspace: OFF";
+            string label = enabled ? "Wormhole: ON" : "Wormhole: OFF";
             if (_buttonText != null && _buttonText.text != label)
             {
                 _buttonText.text = label;

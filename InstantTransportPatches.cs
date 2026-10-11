@@ -7,12 +7,14 @@ namespace SubspaceTransport
     internal static class DetermineDispatchPatch
     {
         [ThreadStatic]
-        private static StationComponent _virtualShipStation;
+        private static StationComponent _virtualDispatchStation;
 
         private struct DispatchState
         {
             internal int OriginalIdleShipCount;
             internal bool AddedVirtualShip;
+            internal int OriginalWarperCount;
+            internal bool AddedVirtualWarper;
         }
 
         private static void Prefix(StationComponent __instance, out DispatchState __state)
@@ -20,17 +22,32 @@ namespace SubspaceTransport
             __state = new DispatchState
             {
                 OriginalIdleShipCount = __instance.idleShipCount,
-                AddedVirtualShip = false
+                AddedVirtualShip = false,
+                OriginalWarperCount = __instance.warperCount,
+                AddedVirtualWarper = false
             };
 
-            if (__state.OriginalIdleShipCount == 0
-                && SubspaceLogisticsTechnology.CurrentLevel > 0
+            if (SubspaceLogisticsTechnology.CurrentLevel > 0
                 && __instance.isStellar
-                && StationSettings.IsEnabled(__instance))
+                && StationSettings.IsEnabled(__instance)
+                && InstantTransport.HasHyperdriveModule(__instance))
             {
-                __state.AddedVirtualShip = true;
-                _virtualShipStation = __instance;
-                __instance.idleShipCount = 1;
+                if (__state.OriginalIdleShipCount == 0)
+                {
+                    __state.AddedVirtualShip = true;
+                    __instance.idleShipCount = 1;
+                }
+
+                if (__state.OriginalWarperCount == 0)
+                {
+                    __state.AddedVirtualWarper = true;
+                    __instance.warperCount = 1;
+                }
+
+                if (__state.AddedVirtualShip || __state.AddedVirtualWarper)
+                {
+                    _virtualDispatchStation = __instance;
+                }
             }
         }
 
@@ -42,15 +59,25 @@ namespace SubspaceTransport
             if (__state.AddedVirtualShip)
             {
                 __instance.idleShipCount = __state.OriginalIdleShipCount;
-                _virtualShipStation = null;
+            }
+
+            if ((__state.AddedVirtualShip || __state.AddedVirtualWarper)
+                && _virtualDispatchStation == __instance)
+            {
+                _virtualDispatchStation = null;
+            }
+
+            if (__state.AddedVirtualWarper)
+            {
+                __instance.warperCount = __state.OriginalWarperCount;
             }
 
             return __exception;
         }
 
-        internal static bool IsUsingVirtualShip(StationComponent station)
+        internal static bool IsUsingVirtualDispatch(StationComponent station)
         {
-            return ReferenceEquals(_virtualShipStation, station);
+            return ReferenceEquals(_virtualDispatchStation, station);
         }
     }
 
@@ -67,9 +94,9 @@ namespace SubspaceTransport
             ref SupplyDemandPair pair,
             ref bool __result)
         {
-            if (!CanUseInstantTransport(__instance, other))
+            if (!CanUseInstantTransport(__instance, other, storagePairSupplyItemId))
             {
-                if (DetermineDispatchPatch.IsUsingVirtualShip(__instance))
+                if (DetermineDispatchPatch.IsUsingVirtualDispatch(__instance))
                 {
                     __result = false;
                     return false;
@@ -84,26 +111,28 @@ namespace SubspaceTransport
                 other,
                 pair.demandIndex,
                 storagePairSupplyItemId,
-                carryCnt);
-
-            if (__result)
-            {
-                InstantTransport.ConsumeWarper(__instance, takeWarper, consumeRegister);
-            }
+                carryCnt,
+                __instance,
+                consumeRegister);
 
             return false;
         }
 
-        private static bool CanUseInstantTransport(StationComponent source, StationComponent destination)
+        private static bool CanUseInstantTransport(
+            StationComponent source,
+            StationComponent destination,
+            int itemId)
         {
             return SubspaceLogisticsTechnology.CurrentLevel > 0
                 && source != null
                 && destination != null
+                && InstantTransport.HasHyperdriveModule(source)
                 && source.isStellar
                 && destination.isStellar
                 && StationSettings.IsEnabled(source)
                 && StationSettings.IsEnabled(destination)
-                && source.gid != destination.gid;
+                && source.gid != destination.gid
+                && itemId != HyperdriveModuleContent.ItemId;
         }
     }
 
@@ -119,9 +148,10 @@ namespace SubspaceTransport
             ref SupplyDemandPair pair,
             ref bool __result)
         {
-            if (!CanUseInstantTransport(__instance, other))
+            int itemId = __instance.storage[pair.demandIndex].itemId;
+            if (!CanUseInstantTransport(__instance, other, itemId))
             {
-                if (DetermineDispatchPatch.IsUsingVirtualShip(__instance))
+                if (DetermineDispatchPatch.IsUsingVirtualDispatch(__instance))
                 {
                     __result = false;
                     return false;
@@ -130,33 +160,34 @@ namespace SubspaceTransport
                 return true;
             }
 
-            int itemId = __instance.storage[pair.demandIndex].itemId;
             __result = InstantTransport.TryTransfer(
                 other,
                 pair.supplyIndex,
                 __instance,
                 pair.demandIndex,
                 itemId,
-                shipCarries);
-
-            if (__result)
-            {
-                InstantTransport.ConsumeWarper(__instance, takeWarper, consumeRegister);
-            }
+                shipCarries,
+                __instance,
+                consumeRegister);
 
             return false;
         }
 
-        private static bool CanUseInstantTransport(StationComponent requester, StationComponent supplier)
+        private static bool CanUseInstantTransport(
+            StationComponent requester,
+            StationComponent supplier,
+            int itemId)
         {
             return SubspaceLogisticsTechnology.CurrentLevel > 0
                 && requester != null
                 && supplier != null
+                && InstantTransport.HasHyperdriveModule(requester)
                 && requester.isStellar
                 && supplier.isStellar
                 && StationSettings.IsEnabled(requester)
                 && StationSettings.IsEnabled(supplier)
-                && requester.gid != supplier.gid;
+                && requester.gid != supplier.gid
+                && itemId != HyperdriveModuleContent.ItemId;
         }
     }
 
@@ -194,7 +225,9 @@ namespace SubspaceTransport
             StationComponent destination,
             int destinationIndex,
             int itemId,
-            int maximumCount)
+            int maximumCount,
+            StationComponent transportStation,
+            int[] consumeRegister)
         {
             if (source.storage == null
                 || destination.storage == null
@@ -228,6 +261,12 @@ namespace SubspaceTransport
                         return false;
                     }
 
+                    int moduleIndex = FindHyperdriveModule(transportStation.storage);
+                    if (moduleIndex < 0)
+                    {
+                        return false;
+                    }
+
                     int sourceAvailable = Math.Min(sourceStore.count, sourceStore.remoteSupplyCount);
                     int destinationDemand = Math.Min(
                         destinationStore.remoteDemandCount,
@@ -251,8 +290,19 @@ namespace SubspaceTransport
                     destinationStore.count += transferredCount;
                     destinationStore.inc += transferredInc;
 
+                    StationStore moduleStore = transportStation.storage[moduleIndex];
+                    moduleStore.count--;
+                    moduleStore.inc -= SplitInc(moduleStore.count + 1, moduleStore.inc, 1);
+                    transportStation.storage[moduleIndex] = moduleStore;
                     source.storage[sourceIndex] = sourceStore;
                     destination.storage[destinationIndex] = destinationStore;
+                    if (consumeRegister != null && consumeRegister.Length > HyperdriveModuleContent.ItemId)
+                    {
+                        lock (consumeRegister)
+                        {
+                            consumeRegister[HyperdriveModuleContent.ItemId]++;
+                        }
+                    }
                 }
             }
 
@@ -260,27 +310,35 @@ namespace SubspaceTransport
             return true;
         }
 
-        internal static void ConsumeWarper(
-            StationComponent station,
-            bool takeWarper,
-            int[] consumeRegister)
+        internal static bool HasHyperdriveModule(StationComponent station)
         {
-            if (!takeWarper || consumeRegister == null)
+            if (station?.storage == null)
             {
-                return;
+                return false;
             }
 
-            lock (consumeRegister)
+            lock (station.storage)
             {
-                int consumed = Math.Min(station.warperCount, 2);
-                if (consumed == 0 && station.warperFree)
+                return FindHyperdriveModule(station.storage) >= 0;
+            }
+        }
+
+        private static int FindHyperdriveModule(StationStore[] storage)
+        {
+            if (storage == null)
+            {
+                return -1;
+            }
+
+            for (int i = 0; i < storage.Length; i++)
+            {
+                if (storage[i].itemId == HyperdriveModuleContent.ItemId && storage[i].count > 0)
                 {
-                    return;
+                    return i;
                 }
-
-                station.warperCount -= consumed;
-                consumeRegister[1210] += consumed;
             }
+
+            return -1;
         }
 
         private static int SplitInc(int count, int inc, int transferCount)

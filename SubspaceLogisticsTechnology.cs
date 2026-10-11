@@ -37,11 +37,11 @@ namespace SubspaceTransport
             TechProto technology = new TechProto
             {
                 ID = TechnologyId,
-                Name = "Subspace Logistics",
+                Name = "Wormhole Logistics",
                 Desc = "Instantly transfer cargo between interstellar logistics stations.",
                 Conclusion =
-                    "Interstellar logistics stations can transfer cargo without logistics vessels. " +
-                    "Transfers still require station power and follow normal warper settings. " +
+                    "Interstellar logistics stations can transfer cargo through wormholes without logistics vessels. " +
+                    "Transfers still require station power. " +
                     "Each research level halves the energy cost, down to the normal trip cost.",
                 IconPath = prerequisite.IconPath,
                 IconTag = prerequisite.IconTag,
@@ -53,7 +53,7 @@ namespace SubspaceTransport
                 Items = (int[])prerequisite.Items.Clone(),
                 ItemPoints = (int[])prerequisite.ItemPoints.Clone(),
                 HashNeeded = prerequisite.HashNeeded,
-                UnlockRecipes = Array.Empty<int>(),
+                UnlockRecipes = new[] { HyperdriveModuleContent.RecipeId },
                 UnlockFunctions = Array.Empty<int>(),
                 UnlockValues = Array.Empty<double>(),
                 Published = true,
@@ -70,7 +70,7 @@ namespace SubspaceTransport
             };
 
             LDBTool.PreAddProto(technology);
-            Logger.LogInfo("Registered the Subspace Logistics research technology.");
+            Logger.LogInfo("Registered the Wormhole Logistics research technology.");
         }
 
         internal static void LinkTechnologyTree()
@@ -104,22 +104,22 @@ namespace SubspaceTransport
                     : GameMain.history);
         }
 
-        private static void EnsureTechState(GameHistoryData history)
+        internal static void EnsureTechState(GameHistoryData history, int technologyId = TechnologyId)
         {
-            if (history?.techStates == null || history.techStates.ContainsKey(TechnologyId))
+            if (history?.techStates == null || history.techStates.ContainsKey(technologyId))
             {
                 return;
             }
 
-            TechProto technology = LDB.techs.Select(TechnologyId);
+            TechProto technology = LDB.techs.Select(technologyId);
             if (technology == null)
             {
                 throw new InvalidOperationException(
-                    "Subspace Logistics was not present after LDBTool added technology prototypes.");
+                    "Technology " + technologyId + " was not present after LDBTool added technology prototypes.");
             }
 
             history.techStates.Add(
-                TechnologyId,
+                technologyId,
                 new TechState(
                     false,
                     technology.Level,

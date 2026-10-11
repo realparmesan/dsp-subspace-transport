@@ -1,11 +1,12 @@
 {
   "name": "SubspaceTransport",
-  "version_number": "0.3.0",
+  "version_number": "0.5.0",
   "website_url": "https://github.com/realparmesan/dsp-subspace-transport",
-  "description": "Instantly transport cargo between interstellar stations with Subspace Logistics research.",
+  "description": "Wormhole Logistics with a dedicated accumulator-charging Battery Sphere project.",
   "dependencies": [
     "xiaoye97-BepInEx-5.4.17",
     "xiaoye97-LDBTool-3.0.3",
-    "CommonAPI-DSPModSave-1.1.0"
+    "CommonAPI-CommonAPI-1.6.7",
+    "CommonAPI-DSPModSave-1.2.1"
   ]
 }

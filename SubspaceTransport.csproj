@@ -5,15 +5,18 @@
     <RootNamespace>SubspaceTransport</RootNamespace>
     <LangVersion>7.3</LangVersion>
     <DSPGameDir Condition="'$(DSPGameDir)' == ''">$(DSP_GAME_DIR)</DSPGameDir>
+    <DSPGameDataDir Condition="'$(DSPGameDataDir)' == '' and Exists('$(DSPGameDir)/DSPGAME_Data/Managed/Assembly-CSharp.dll')">$(DSPGameDir)/DSPGAME_Data</DSPGameDataDir>
+    <DSPGameDataDir Condition="'$(DSPGameDataDir)' == ''">$(DSPGameDir)/DSP_Data</DSPGameDataDir>
     <DSPBepInExDir Condition="'$(DSPBepInExDir)' == '' and '$(DSP_BEPINEX_DIR)' != ''">$(DSP_BEPINEX_DIR)</DSPBepInExDir>
     <DSPBepInExDir Condition="'$(DSPBepInExDir)' == ''">$(DSPGameDir)/BepInEx</DSPBepInExDir>
     <DSPLdbToolDir Condition="'$(DSPLdbToolDir)' == '' and '$(DSP_LDBTOOL_DIR)' != ''">$(DSP_LDBTOOL_DIR)</DSPLdbToolDir>
     <DSPLdbToolDir Condition="'$(DSPLdbToolDir)' == ''">$(DSPBepInExDir)/plugins/LDBTool</DSPLdbToolDir>
+    <DSPCommonAPIDir Condition="'$(DSPCommonAPIDir)' == ''">$(DSPBepInExDir)/plugins/CommonAPI-CommonAPI</DSPCommonAPIDir>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
-    <PackageReference Include="DysonSphereProgram.Modding.DSPModSave" Version="1.2.1" />
+    <PackageReference Include="DysonSphereProgram.Modding.DSPModSave" Version="1.2.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,27 +32,47 @@
       <HintPath>$(DSPLdbToolDir)/LDBTool.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="CommonAPI">
+      <HintPath>$(DSPCommonAPIDir)/CommonAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Assembly-CSharp">
-      <HintPath>$(DSPGameDir)/DSP_Data/Managed/Assembly-CSharp.dll</HintPath>
+      <HintPath>$(DSPGameDataDir)/Managed/Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(DSPGameDataDir)/Managed/UnityEngine.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(DSPGameDir)/DSP_Data/Managed/UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>$(DSPGameDataDir)/Managed/UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">
-      <HintPath>$(DSPGameDir)/DSP_Data/Managed/UnityEngine.UI.dll</HintPath>
+      <HintPath>$(DSPGameDataDir)/Managed/UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(DSPGameDataDir)/Managed/UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(DSPGameDataDir)/Managed/UnityEngine.TextRenderingModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
 
   <Target Name="ValidateGameReferences" BeforeTargets="ResolveReferences">
     <Error Condition="'$(DSPGameDir)' == ''" Text="Set DSP_GAME_DIR to the Dyson Sphere Program install directory." />
-    <Error Condition="!Exists('$(DSPGameDir)/DSP_Data/Managed/Assembly-CSharp.dll')" Text="DSP game assemblies not found. Check DSP_GAME_DIR: $(DSPGameDir)" />
+    <Error Condition="!Exists('$(DSPGameDataDir)/Managed/Assembly-CSharp.dll')" Text="DSP game assemblies not found. Check DSP_GAME_DIR: $(DSPGameDir)" />
+    <Error Condition="!Exists('$(DSPGameDataDir)/Managed/UnityEngine.dll')" Text="UnityEngine assembly not found under $(DSPGameDataDir)/Managed." />
     <Error Condition="!Exists('$(DSPBepInExDir)/core/BepInEx.dll')" Text="BepInEx not found. Set DSP_BEPINEX_DIR to the BepInEx folder containing core/." />
     <Error Condition="!Exists('$(DSPBepInExDir)/core/0Harmony.dll')" Text="Harmony not found under $(DSPBepInExDir)/core." />
     <Error Condition="!Exists('$(DSPLdbToolDir)/LDBTool.dll')" Text="LDBTool not found. Set DSP_LDBTOOL_DIR to the folder containing LDBTool.dll." />
-    <Error Condition="!Exists('$(DSPGameDir)/DSP_Data/Managed/UnityEngine.CoreModule.dll')" Text="Unity assemblies not found under $(DSPGameDir)/DSP_Data/Managed." />
-    <Error Condition="!Exists('$(DSPGameDir)/DSP_Data/Managed/UnityEngine.UI.dll')" Text="Unity UI assembly not found under $(DSPGameDir)/DSP_Data/Managed." />
+    <Error Condition="!Exists('$(DSPCommonAPIDir)/CommonAPI.dll')" Text="CommonAPI not found under $(DSPCommonAPIDir)." />
+    <Error Condition="!Exists('$(DSPGameDataDir)/Managed/UnityEngine.CoreModule.dll')" Text="Unity assemblies not found under $(DSPGameDataDir)/Managed." />
+    <Error Condition="!Exists('$(DSPGameDataDir)/Managed/UnityEngine.UI.dll')" Text="Unity UI assembly not found under $(DSPGameDataDir)/Managed." />
+    <Error Condition="!Exists('$(DSPGameDataDir)/Managed/UnityEngine.UIModule.dll')" Text="Unity UI module assembly not found under $(DSPGameDataDir)/Managed." />
+    <Error Condition="!Exists('$(DSPGameDataDir)/Managed/UnityEngine.TextRenderingModule.dll')" Text="Unity text rendering assembly not found under $(DSPGameDataDir)/Managed." />
   </Target>
 </Project>
