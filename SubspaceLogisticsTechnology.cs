@@ -10,6 +10,7 @@ namespace SubspaceTransport
     {
         internal const int TechnologyId = 1919;
         internal const int InterstellarLogisticsTechnologyId = 1605;
+        internal const int VeinUtilizationTechnologyId = 1606;
         internal const int MaximumLevel = 4;
 
         internal static ManualLogSource Logger;
@@ -36,6 +37,13 @@ namespace SubspaceTransport
                     "The Interstellar Logistics System technology has no research cost data.");
             }
 
+            TechProto veinUtil = LDB.techs.Select(VeinUtilizationTechnologyId);
+            int[] items = veinUtil?.Items != null ? (int[])veinUtil.Items.Clone() : (int[])prerequisite.Items.Clone();
+            int[] itemPoints = veinUtil?.ItemPoints != null ? (int[])veinUtil.ItemPoints.Clone() : (int[])prerequisite.ItemPoints.Clone();
+            long hashNeeded = veinUtil != null && veinUtil.HashNeeded > 0 ? veinUtil.HashNeeded : prerequisite.HashNeeded;
+            double levelCoef1 = veinUtil != null ? veinUtil.LevelCoef1 : 0;
+            double levelCoef2 = veinUtil != null ? veinUtil.LevelCoef2 : 0;
+
             TechProto technology = new TechProto
             {
                 ID = TechnologyId,
@@ -52,17 +60,17 @@ namespace SubspaceTransport
                 Position = prerequisite.Position + new Vector2(4f, 0f),
                 PreTechs = new[] { InterstellarLogisticsTechnologyId },
                 PreTechsImplicit = Array.Empty<int>(),
-                Items = (int[])prerequisite.Items.Clone(),
-                ItemPoints = (int[])prerequisite.ItemPoints.Clone(),
-                HashNeeded = prerequisite.HashNeeded,
+                Items = items,
+                ItemPoints = itemPoints,
+                HashNeeded = hashNeeded,
                 UnlockRecipes = new[] { HyperdriveModuleContent.RecipeId },
                 UnlockFunctions = Array.Empty<int>(),
                 UnlockValues = Array.Empty<double>(),
                 Published = true,
                 Level = 0,
                 MaxLevel = MaximumLevel,
-                LevelCoef1 = 0,
-                LevelCoef2 = 0,
+                LevelCoef1 = levelCoef1,
+                LevelCoef2 = levelCoef2,
                 IsLabTech = true,
                 PreTechsMax = false,
                 AddItems = Array.Empty<int>(),

@@ -58,9 +58,9 @@ namespace SubspaceTransport
                 2801,
                 100,
                 EItemType.Component,
-                ProtoRegistry.GetDefaultIconDesc(Color.cyan, Color.blue));
+                ProtoRegistry.GetDefaultIconDesc(new Color(0.85f, 0.25f, 1f), new Color(0.2f, 0.85f, 1f)));
 
-            ProtoRegistry.RegisterRecipe(
+            RecipeProto recipe = ProtoRegistry.RegisterRecipe(
                 RecipeId,
                 ERecipeType.Assemble,
                 360,
@@ -73,6 +73,8 @@ namespace SubspaceTransport
                 2801,
                 "SubspaceTransport_HyperdriveModuleRecipe",
                 spaceWarper.IconPath);
+            recipe.Handcraft = true;
+            recipe.Explicit = true;
 
             Plugin.ModLogger.LogInfo("Registered the Hyperdrive Module item and recipe.");
         }
