@@ -20,7 +20,7 @@ namespace SubspaceTransport
     {
         public const string PluginGuid = "realparmesan.dsp.subspacetransport";
         public const string PluginName = "Wormhole Logistics";
-        public const string PluginVersion = "0.5.2";
+        public const string PluginVersion = "0.5.3";
 
         internal static Plugin Log { get; private set; }
         internal static BepInEx.Logging.ManualLogSource ModLogger { get; private set; }

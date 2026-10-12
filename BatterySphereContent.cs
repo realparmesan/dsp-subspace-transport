@@ -9,7 +9,7 @@ namespace SubspaceTransport
 {
     internal static class BatterySphereContent
     {
-        internal const int TechnologyId = 11999;
+        internal const int TechnologyId = 1920;
         internal const int ItemId = 11997;
         internal const int RecipeId = 11997;
 

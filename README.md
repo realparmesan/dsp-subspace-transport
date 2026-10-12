@@ -2,7 +2,7 @@
 
 A BepInEx 5 plugin for Dyson Sphere Program. Research Wormhole Logistics to transfer cargo instantly between Interstellar Logistics Stations without using Logistics Vessels.
 
-The research has four levels. Transfers retain the normal vessel cargo capacity and station energy settings. Station energy use starts at 8x the vanilla trip cost, halves at each level, and reaches the vanilla cost at level 4. Instant transfer is disabled by default and must be enabled separately at both endpoint stations with the Wormhole toggle in the station window. The same control is available when opening a remote station from the starmap. Station choices are saved with each game.
+Wormhole Logistics appears on the main technology page after Interstellar Logistics System; Battery Sphere Engineering follows it. The research has four levels. Transfers retain the normal vessel cargo capacity and station energy settings. Station energy use starts at 8x the vanilla trip cost, halves at each level, and reaches the vanilla cost at level 4. Instant transfer is disabled by default and must be enabled separately at both endpoint stations with the Wormhole toggle in the station window. The same control is available when opening a remote station from the starmap. Station choices are saved with each game.
 
 Instant shipments consume one Hyperdrive Module from the station initiating the transfer, instead of Space Warpers. Modules are assembled from 4 Space Warpers and 2 Graviton Lenses. The module is excluded from instant cargo transfer to prevent it being shipped by the system that consumes it.
 
@@ -44,7 +44,7 @@ With `DSP_GAME_DIR` (and, if needed, `DSP_BEPINEX_DIR`) set, run:
 bash scripts/package.sh
 ```
 
-This creates `dist/SubspaceTransport-0.5.2.zip`, with the manifest, readme, icon, and plugin DLL in Thunderstore's expected layout.
+This creates `dist/SubspaceTransport-0.5.3.zip`, with the manifest, readme, icon, and plugin DLL in Thunderstore's expected layout.
 
 ## Project files
 

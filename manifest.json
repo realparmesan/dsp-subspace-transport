@@ -1,6 +1,6 @@
 {
   "name": "SubspaceTransport",
-  "version_number": "0.5.2",
+  "version_number": "0.5.3",
   "website_url": "https://github.com/realparmesan/dsp-subspace-transport",
   "description": "Wormhole Logistics with a dedicated accumulator-charging Battery Sphere project.",
   "dependencies": [

@@ -8,7 +8,7 @@ namespace SubspaceTransport
 {
     internal static class SubspaceLogisticsTechnology
     {
-        internal const int TechnologyId = 11998;
+        internal const int TechnologyId = 1919;
         internal const int InterstellarLogisticsTechnologyId = 1605;
         internal const int MaximumLevel = 4;
 
