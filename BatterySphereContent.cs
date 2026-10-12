@@ -103,7 +103,7 @@ namespace SubspaceTransport
                 IconTag = vanillaResearch.IconTag,
                 IsHiddenTech = false,
                 PreItem = Array.Empty<int>(),
-                Position = vanillaResearch.Position + new Vector2(6f, 1f),
+                Position = vanillaResearch.Position + new Vector2(8f, 2f),
                 PreTechs = new[] { SubspaceLogisticsTechnology.TechnologyId },
                 PreTechsImplicit = Array.Empty<int>(),
                 Items = (int[])vanillaResearch.Items.Clone(),
