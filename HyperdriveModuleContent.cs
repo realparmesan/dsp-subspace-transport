@@ -8,17 +8,29 @@ namespace SubspaceTransport
 {
     internal static class HyperdriveModuleContent
     {
-        internal const int ItemId = 20010;
-        internal const int RecipeId = 20010;
+        internal const int ItemId = 11996;
+        internal const int RecipeId = 11996;
         private const int SpaceWarperItemId = 1210;
         private const int GravitonLensItemId = 1209;
 
         internal static void Register()
         {
-            if (LDB.items.Select(ItemId) != null || LDB.recipes.Select(RecipeId) != null)
+            ItemProto existingItem = Array.Find(
+                LDB.items.dataArray,
+                item => item != null && item.ID == ItemId);
+            if (existingItem != null)
             {
                 throw new InvalidOperationException(
-                    "Hyperdrive Module item or recipe ID is already in use.");
+                    "Hyperdrive Module item ID " + ItemId + " is already in use by " +
+                    "'" + existingItem.name + "'.");
+            }
+
+            if (Array.Exists(
+                LDB.recipes.dataArray,
+                recipe => recipe != null && recipe.ID == RecipeId))
+            {
+                throw new InvalidOperationException(
+                    "Hyperdrive Module recipe ID " + RecipeId + " is already in use.");
             }
 
             ItemProto spaceWarper = LDB.items.Select(SpaceWarperItemId);
@@ -34,6 +46,9 @@ namespace SubspaceTransport
             LocalizationModule.RegisterTranslation(
                 "SubspaceTransport_HyperdriveModuleDescription",
                 "A stabilized spacetime-curvature module used to power wormhole logistics.");
+            LocalizationModule.RegisterTranslation(
+                "SubspaceTransport_HyperdriveModuleRecipe",
+                "Hyperdrive Module");
 
             ProtoRegistry.RegisterItem(
                 ItemId,
@@ -56,6 +71,7 @@ namespace SubspaceTransport
                 "SubspaceTransport_HyperdriveModuleDescription",
                 SubspaceLogisticsTechnology.TechnologyId,
                 2801,
+                "SubspaceTransport_HyperdriveModuleRecipe",
                 spaceWarper.IconPath);
 
             Plugin.ModLogger.LogInfo("Registered the Hyperdrive Module item and recipe.");

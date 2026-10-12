@@ -1,5 +1,8 @@
 using System.IO;
 using BepInEx;
+using CommonAPI;
+using CommonAPI.Systems;
+using CommonAPI.Systems.ModLocalization;
 using HarmonyLib;
 using crecheng.DSPModSave;
 using xiaoye97;
@@ -10,13 +13,14 @@ namespace SubspaceTransport
     [BepInDependency(LDBToolPlugin.MODGUID)]
     [BepInDependency(DSPModSavePlugin.MODGUID)]
     [BepInDependency("dsp.common-api.CommonAPI")]
+    [CommonAPISubmoduleDependency(nameof(ProtoRegistry), nameof(LocalizationModule))]
     [BepInProcess("DSPGAME.exe")]
     [BepInProcess("Dyson Sphere Program.exe")]
     public sealed class Plugin : BaseUnityPlugin, IModCanSave
     {
         public const string PluginGuid = "realparmesan.dsp.subspacetransport";
         public const string PluginName = "Wormhole Logistics";
-        public const string PluginVersion = "0.5.0";
+        public const string PluginVersion = "0.5.2";
 
         internal static Plugin Log { get; private set; }
         internal static BepInEx.Logging.ManualLogSource ModLogger { get; private set; }

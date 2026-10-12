@@ -9,9 +9,9 @@ namespace SubspaceTransport
 {
     internal static class BatterySphereContent
     {
-        internal const int TechnologyId = 20002;
-        internal const int ItemId = 20011;
-        internal const int RecipeId = 20011;
+        internal const int TechnologyId = 11999;
+        internal const int ItemId = 11997;
+        internal const int RecipeId = 11997;
 
         private const int SmallCarrierRocketItemId = 1503;
         private const int EnergyExchangerItemId = 2208;
@@ -20,9 +20,15 @@ namespace SubspaceTransport
 
         internal static void Register()
         {
-            if (LDB.techs.Select(TechnologyId) != null
-                || LDB.items.Select(ItemId) != null
-                || LDB.recipes.Select(RecipeId) != null)
+            if (Array.Exists(
+                    LDB.techs.dataArray,
+                    proto => proto != null && proto.ID == TechnologyId)
+                || Array.Exists(
+                    LDB.items.dataArray,
+                    item => item != null && item.ID == ItemId)
+                || Array.Exists(
+                    LDB.recipes.dataArray,
+                    recipe => recipe != null && recipe.ID == RecipeId))
             {
                 throw new InvalidOperationException("A Battery Sphere prototype ID is already in use.");
             }
@@ -44,6 +50,9 @@ namespace SubspaceTransport
             LocalizationModule.RegisterTranslation(
                 "SubspaceTransport_BatterySphereRocketDescription",
                 "A project rocket that expands a dedicated virtual Dyson Sphere to charge accumulators.");
+            LocalizationModule.RegisterTranslation(
+                "SubspaceTransport_BatterySphereRocketRecipe",
+                "Battery Sphere Rocket");
 
             ItemProto batteryRocket = ProtoRegistry.RegisterItem(
                 ItemId,
@@ -79,6 +88,7 @@ namespace SubspaceTransport
                 "SubspaceTransport_BatterySphereRocketDescription",
                 TechnologyId,
                 2810,
+                "SubspaceTransport_BatterySphereRocketRecipe",
                 carrierRocket.IconPath);
 
             TechProto technology = new TechProto

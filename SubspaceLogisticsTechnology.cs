@@ -8,7 +8,7 @@ namespace SubspaceTransport
 {
     internal static class SubspaceLogisticsTechnology
     {
-        internal const int TechnologyId = 20001;
+        internal const int TechnologyId = 11998;
         internal const int InterstellarLogisticsTechnologyId = 1605;
         internal const int MaximumLevel = 4;
 
@@ -16,7 +16,9 @@ namespace SubspaceTransport
 
         internal static void Register()
         {
-            if (LDB.techs.Select(TechnologyId) != null)
+            if (Array.Exists(
+                LDB.techs.dataArray,
+                proto => proto != null && proto.ID == TechnologyId))
             {
                 throw new InvalidOperationException(
                     "Technology ID " + TechnologyId + " is already in use.");

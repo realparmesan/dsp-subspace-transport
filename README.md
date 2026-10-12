@@ -44,7 +44,7 @@ With `DSP_GAME_DIR` (and, if needed, `DSP_BEPINEX_DIR`) set, run:
 bash scripts/package.sh
 ```
 
-This creates `dist/SubspaceTransport-0.5.0.zip`, with the manifest, readme, icon, and plugin DLL in Thunderstore's expected layout.
+This creates `dist/SubspaceTransport-0.5.2.zip`, with the manifest, readme, icon, and plugin DLL in Thunderstore's expected layout.
 
 ## Project files
 
