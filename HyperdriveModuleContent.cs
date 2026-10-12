@@ -27,7 +27,7 @@ namespace SubspaceTransport
 
             if (Array.Exists(
                 LDB.recipes.dataArray,
-                recipe => recipe != null && recipe.ID == RecipeId))
+                existing => existing != null && existing.ID == RecipeId))
             {
                 throw new InvalidOperationException(
                     "Hyperdrive Module recipe ID " + RecipeId + " is already in use.");

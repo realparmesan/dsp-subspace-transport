@@ -41,8 +41,8 @@ namespace SubspaceTransport
             int[] items = veinUtil?.Items != null ? (int[])veinUtil.Items.Clone() : (int[])prerequisite.Items.Clone();
             int[] itemPoints = veinUtil?.ItemPoints != null ? (int[])veinUtil.ItemPoints.Clone() : (int[])prerequisite.ItemPoints.Clone();
             long hashNeeded = veinUtil != null && veinUtil.HashNeeded > 0 ? veinUtil.HashNeeded : prerequisite.HashNeeded;
-            double levelCoef1 = veinUtil != null ? veinUtil.LevelCoef1 : 0;
-            double levelCoef2 = veinUtil != null ? veinUtil.LevelCoef2 : 0;
+            int levelCoef1 = veinUtil != null ? veinUtil.LevelCoef1 : 0;
+            int levelCoef2 = veinUtil != null ? veinUtil.LevelCoef2 : 0;
 
             TechProto technology = new TechProto
             {
