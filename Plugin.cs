@@ -38,16 +38,21 @@ namespace SubspaceTransport
             Log = this;
             ModLogger = Logger;
             SubspaceLogisticsTechnology.Logger = Logger;
+            WormholeEfficiencyTechnology.Logger = Logger;
             BatterySphereContent.Logger = Logger;
             TabPage = TabSystem.RegisterTab(
                 TabId,
                 new TabData("Wormhole Logistics", IconLoader.WormholeLogisticsTech));
+            SubspaceLogisticsTechnology.RegisterTranslations();
+            WormholeEfficiencyTechnology.RegisterTranslations();
             SubspaceWarperContent.RegisterTranslations();
             BatterySphereContent.RegisterTranslations();
             LDBTool.PreAddDataAction += SubspaceLogisticsTechnology.Register;
+            LDBTool.PreAddDataAction += WormholeEfficiencyTechnology.Register;
             LDBTool.PreAddDataAction += SubspaceWarperContent.Register;
             LDBTool.PreAddDataAction += BatterySphereContent.Register;
             LDBTool.PostAddDataAction += SubspaceLogisticsTechnology.LinkTechnologyTree;
+            LDBTool.PostAddDataAction += WormholeEfficiencyTechnology.LinkTechnologyTree;
             LDBTool.PostAddDataAction += BatterySphereContent.LinkTechnologyTree;
 
             _harmony = new Harmony(PluginGuid);
@@ -59,9 +64,11 @@ namespace SubspaceTransport
         private void OnDestroy()
         {
             LDBTool.PreAddDataAction -= SubspaceLogisticsTechnology.Register;
+            LDBTool.PreAddDataAction -= WormholeEfficiencyTechnology.Register;
             LDBTool.PreAddDataAction -= SubspaceWarperContent.Register;
             LDBTool.PreAddDataAction -= BatterySphereContent.Register;
             LDBTool.PostAddDataAction -= SubspaceLogisticsTechnology.LinkTechnologyTree;
+            LDBTool.PostAddDataAction -= WormholeEfficiencyTechnology.LinkTechnologyTree;
             LDBTool.PostAddDataAction -= BatterySphereContent.LinkTechnologyTree;
             _harmony?.UnpatchSelf();
             if (Log == this)
@@ -84,6 +91,7 @@ namespace SubspaceTransport
 
         public void Import(BinaryReader reader)
         {
+            TransportDiagnostics.Reset();
             StationSettings.Import(reader);
             if (reader.BaseStream.CanSeek && reader.BaseStream.Position < reader.BaseStream.Length)
             {
@@ -97,6 +105,7 @@ namespace SubspaceTransport
 
         public void IntoOtherSave()
         {
+            TransportDiagnostics.Reset();
             StationSettings.Reset();
             BatterySphereManager.Reset();
         }

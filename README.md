@@ -2,9 +2,9 @@
 
 A BepInEx 5 plugin for Dyson Sphere Program. Research Wormhole Logistics to transfer cargo instantly between Interstellar Logistics Stations without using Logistics Vessels.
 
-Wormhole Logistics appears on the main technology page after Interstellar Logistics System; Battery Sphere Engineering follows it. The research has four levels. Transfers retain the normal vessel cargo capacity and station energy settings. Station energy use starts at 8x the vanilla trip cost, halves at each level, and reaches the vanilla cost at level 4. Instant transfer is disabled by default and must be enabled separately at both endpoint stations with the **Wormhole Transport** checkbox in the Interstellar Logistics Station's Station Settings tab. Station choices are saved with each game.
+Wormhole Logistics appears on the main technology page after Interstellar Logistics System. It is a single research with the same cost as the first level of Dyson Sphere Stress System, and it leads to two further techs: Battery Sphere Engineering (same cost as Artificial Star) and Wormhole Efficiency. Transfers retain the normal vessel cargo capacity and station energy settings. Station energy use starts at 8x the vanilla trip cost and halves with each of Wormhole Efficiency's three levels, reaching the vanilla cost at level 3. Instant transfer is disabled by default and must be enabled separately at both endpoint stations with the **Wormhole Transport** checkbox, either in the Interstellar Logistics Station's Station Settings tab or in the station's settings tab in the Control Panel. Station choices are saved with each game. Like vessels, wormhole transport only runs between stations on different planets; the game never pairs two stations on the same planet for remote supply and demand.
 
-Instant shipments consume one Subspace Warper from the station initiating the transfer, instead of Space Warpers. Subspace Warpers are assembled from 4 Space Warpers and 2 Graviton Lenses in an assembler (they are not craftable in the replicator). Each Interstellar Logistics Station has a dedicated Subspace Warper slot beneath its drone, vessel, and Space Warper slots, holding up to 100. Like the Space Warper slot, it fills from belts, from sorters, from a storage row containing Subspace Warpers, or by clicking it with Subspace Warpers in hand; clicking it with an empty hand takes them out. Subspace Warpers are excluded from instant cargo transfer to prevent them being shipped by the system that consumes them.
+Instant shipments consume one Subspace Warper instead of Space Warpers. The sending station pays by default; if its Subspace Warper slot is empty, the receiving station pays instead, so a station can keep Subspace Warpers and pull cargo from senders that have none. Neither station needs Logistics Vessels, Space Warpers, or warp drive research for a wormhole transfer. The station's **Min. Load of Vessels** setting still applies: a station only dispatches once the supplying slot holds that share of a vessel's capacity, so wormhole cargo moves in batches. Subspace Warpers are assembled from 4 Space Warpers and 2 Graviton Lenses in an assembler (they are not craftable in the replicator). Each Interstellar Logistics Station has a dedicated Subspace Warper slot beneath its drone, vessel, and Space Warper slots, holding up to 100. The Control Panel shows the slot's count in the station list and the station inspector. Like the Space Warper slot, it fills from belts, from sorters, from a storage row containing Subspace Warpers, or by clicking it with Subspace Warpers in hand; clicking it with an empty hand takes them out. Subspace Warpers are excluded from instant cargo transfer to prevent them being shipped by the system that consumes them.
 
 The mod's items (Battery Rocket and Subspace Warper) are on their own **Wormhole Logistics** tab in the recipe and item pickers.
 
@@ -14,11 +14,11 @@ Battery Sphere Engineering unlocks Battery Rockets. Each rocket uses a Small Car
 
 Each completed project rocket contributes 1 MW of dedicated charging output. Accumulators store 270 MJ each, so one rocket produces one charged accumulator every 270 seconds while empty accumulators are available. Output from planned Battery Sphere projects across the cluster feeds a shared, bounded buffer; it does not consume ordinary Dyson Sphere output or interact with Ray Receivers.
 
-To exchange batteries, enable Wormhole Transport at participating Interstellar Logistics Stations and keep Subspace Warpers in their Subspace Warper slot. Configure an empty Accumulator slot as remote Supply and a full Accumulator slot as remote Demand. Any enabled station in the cluster can contribute or request batteries. Each empty-accumulator intake batch and each charged-accumulator delivery batch (up to 1,000 items) consumes one Subspace Warper and station energy at that station, with the energy multiplier following Wormhole Logistics research. Project progress and the accumulator buffer are saved with the game.
+To exchange batteries, enable Wormhole Transport at participating Interstellar Logistics Stations and keep Subspace Warpers in their Subspace Warper slot. Configure an empty Accumulator slot as remote Supply and a full Accumulator slot as remote Demand. Any enabled station in the cluster can contribute or request batteries. Each empty-accumulator intake batch and each charged-accumulator delivery batch (up to 1,000 items) consumes one Subspace Warper and station energy at that station (the Battery Sphere has no station of its own, so a station receiving charged accumulators pays for their delivery), with the energy multiplier following Wormhole Efficiency research. Project progress and the accumulator buffer are saved with the game.
 
 Wormhole Logistics targets vanilla Interstellar Logistics Station components only. It has no direct integration with Galactic Scale, Orbital Ring, or their mod-added structures and private/shared storage.
 
-More Megastructures is optional and compatible. The two mods use separate tech IDs (this mod uses 1950 and 1951), separate replicator tabs, and separate structure selectors in the Dyson Sphere editor. A star can hold either a Battery Sphere or a More Megastructures structure; each selector asks you to switch the star back to a Dyson Sphere before changing it to the other mod's type.
+More Megastructures is optional and compatible. The two mods use separate tech IDs (this mod uses 1950-1952), separate replicator tabs, and separate structure selectors in the Dyson Sphere editor. A star can hold either a Battery Sphere or a More Megastructures structure; each selector asks you to switch the star back to a Dyson Sphere before changing it to the other mod's type.
 
 **Save compatibility:** 0.6.0 changes the research IDs, so Wormhole Logistics and Battery Sphere Engineering must be researched again in saves from earlier versions.
 
@@ -55,7 +55,8 @@ This creates `dist/SubspaceTransport-0.6.0.zip`, with the manifest, readme, icon
 ## Project files
 
 - `Plugin.cs` — BepInEx entry point and patch lifecycle
-- `SubspaceLogisticsTechnology.cs` — registers the four-level research path
+- `SubspaceLogisticsTechnology.cs` — registers the Wormhole Logistics research
+- `WormholeEfficiencyTechnology.cs` — registers the three-level Wormhole Efficiency research and its energy multiplier
 - `SubspaceWarperContent.cs` — registers the Subspace Warper and its recipe
 - `IconLoader.cs` — loads the embedded icons in `assets/icons/` for mod items, recipes, techs, and the tab
 - `BatterySphereContent.cs` — registers the Battery Sphere rocket and research unlock
@@ -67,6 +68,7 @@ This creates `dist/SubspaceTransport-0.6.0.zip`, with the manifest, readme, icon
 - `SubspaceWarperSlotPatches.cs` — fills and empties the Subspace Warper slot (belts, sorters, storage rows, dismantling)
 - `MoreMegaStructureCompat.cs` — optional More Megastructures interop, found by reflection
 - `StationWindowUI.cs` — Wormhole Transport settings row and Subspace Warper slot in the station window
+- `ControlPanelUI.cs` — Subspace Warper rows and Wormhole Transport checkbox in the Control Panel
 - `SubspaceTransport.csproj` — .NET target and references to the local DSP, BepInEx, LDBTool, CommonAPI, and DSP Mod Save assemblies
 - `manifest.json` — Thunderstore package metadata and loader dependencies
 - `scripts/package.sh` — builds and creates a Thunderstore-ready zip

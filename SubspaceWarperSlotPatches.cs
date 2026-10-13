@@ -41,7 +41,7 @@ namespace SubspaceTransport
         private static void Postfix(StationComponent __instance)
         {
             int[] needs = __instance.needs;
-            if (needs == null || needs.Length < 6 || SubspaceLogisticsTechnology.CurrentLevel <= 0)
+            if (needs == null || needs.Length < 6 || !SubspaceLogisticsTechnology.IsUnlocked)
             {
                 return;
             }

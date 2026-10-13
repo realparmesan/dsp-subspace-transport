@@ -122,7 +122,7 @@ namespace SubspaceTransport
             float shipWarpSpeed)
         {
             if (stationPool == null
-                || SubspaceLogisticsTechnology.CurrentLevel <= 0
+                || !SubspaceLogisticsTechnology.IsUnlocked
                 || !BatterySphereContent.IsUnlocked
                 || GameMain.instance == null)
             {

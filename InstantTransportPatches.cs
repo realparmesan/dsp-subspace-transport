@@ -1,53 +1,71 @@
 using System;
+using System.Collections.Generic;
 using HarmonyLib;
 
 namespace SubspaceTransport
 {
+    // Vanilla only dispatches when the station has an idle vessel and, for trips past the warp distance with
+    // "Warpers Required" on, two Space Warpers and warp drive research. Wormhole transfers need neither, so for
+    // enabled stations those conditions are lifted for the duration of DetermineDispatch. The dispatch patches
+    // below then refuse any vessel dispatch that vanilla would not have allowed.
     [HarmonyPatch(typeof(StationComponent), "DetermineDispatch")]
     internal static class DetermineDispatchPatch
     {
         [ThreadStatic]
         private static StationComponent _virtualDispatchStation;
 
+        [ThreadStatic]
+        private static bool _addedVirtualShip;
+
+        [ThreadStatic]
+        private static bool _clearedWarperNecessary;
+
+        [ThreadStatic]
+        private static bool _canWarp;
+
         private struct DispatchState
         {
             internal int OriginalIdleShipCount;
             internal bool AddedVirtualShip;
-            internal int OriginalWarperCount;
-            internal bool AddedVirtualWarper;
+            internal bool ClearedWarperNecessary;
         }
 
-        private static void Prefix(StationComponent __instance, out DispatchState __state)
+        private static void Prefix(
+            StationComponent __instance,
+            float shipSailSpeed,
+            float shipWarpSpeed,
+            out DispatchState __state)
         {
             __state = new DispatchState
             {
                 OriginalIdleShipCount = __instance.idleShipCount,
                 AddedVirtualShip = false,
-                OriginalWarperCount = __instance.warperCount,
-                AddedVirtualWarper = false
+                ClearedWarperNecessary = false
             };
 
-            if (SubspaceLogisticsTechnology.CurrentLevel > 0
-                && __instance.isStellar
-                && StationSettings.IsEnabled(__instance)
-                && InstantTransport.HasSubspaceWarper(__instance))
+            if (!SubspaceLogisticsTechnology.IsUnlocked || !StationSettings.IsEnabled(__instance))
             {
-                if (__state.OriginalIdleShipCount == 0)
-                {
-                    __state.AddedVirtualShip = true;
-                    __instance.idleShipCount = 1;
-                }
+                return;
+            }
 
-                if (__state.OriginalWarperCount == 0)
-                {
-                    __state.AddedVirtualWarper = true;
-                    __instance.warperCount = 1;
-                }
+            if (__instance.idleShipCount == 0)
+            {
+                __state.AddedVirtualShip = true;
+                __instance.idleShipCount = 1;
+            }
 
-                if (__state.AddedVirtualShip || __state.AddedVirtualWarper)
-                {
-                    _virtualDispatchStation = __instance;
-                }
+            if (__instance.warperNecessary)
+            {
+                __state.ClearedWarperNecessary = true;
+                __instance.warperNecessary = false;
+            }
+
+            if (__state.AddedVirtualShip || __state.ClearedWarperNecessary)
+            {
+                _virtualDispatchStation = __instance;
+                _addedVirtualShip = __state.AddedVirtualShip;
+                _clearedWarperNecessary = __state.ClearedWarperNecessary;
+                _canWarp = shipWarpSpeed > shipSailSpeed + 1f;
             }
         }
 
@@ -61,23 +79,29 @@ namespace SubspaceTransport
                 __instance.idleShipCount = __state.OriginalIdleShipCount;
             }
 
-            if ((__state.AddedVirtualShip || __state.AddedVirtualWarper)
-                && _virtualDispatchStation == __instance)
+            if (__state.ClearedWarperNecessary)
             {
-                _virtualDispatchStation = null;
+                __instance.warperNecessary = true;
             }
 
-            if (__state.AddedVirtualWarper)
+            if (ReferenceEquals(_virtualDispatchStation, __instance))
             {
-                __instance.warperCount = __state.OriginalWarperCount;
+                _virtualDispatchStation = null;
             }
 
             return __exception;
         }
 
-        internal static bool IsUsingVirtualDispatch(StationComponent station)
+        // True when a vessel dispatch got past DetermineDispatch only because of the lifted conditions.
+        internal static bool IsVesselDispatchBlocked(StationComponent station, bool takeWarper)
         {
-            return ReferenceEquals(_virtualDispatchStation, station);
+            if (!ReferenceEquals(_virtualDispatchStation, station))
+            {
+                return false;
+            }
+
+            return _addedVirtualShip
+                || (_clearedWarperNecessary && takeWarper && (station.warperCount < 2 || !_canWarp));
         }
     }
 
@@ -94,9 +118,9 @@ namespace SubspaceTransport
             ref SupplyDemandPair pair,
             ref bool __result)
         {
-            if (!CanUseInstantTransport(__instance, other, storagePairSupplyItemId))
+            if (!InstantTransport.CanTransfer(__instance, other, storagePairSupplyItemId))
             {
-                if (DetermineDispatchPatch.IsUsingVirtualDispatch(__instance))
+                if (DetermineDispatchPatch.IsVesselDispatchBlocked(__instance, takeWarper))
                 {
                     __result = false;
                     return false;
@@ -112,27 +136,9 @@ namespace SubspaceTransport
                 pair.demandIndex,
                 storagePairSupplyItemId,
                 carryCnt,
-                __instance,
                 consumeRegister);
 
             return false;
-        }
-
-        private static bool CanUseInstantTransport(
-            StationComponent source,
-            StationComponent destination,
-            int itemId)
-        {
-            return SubspaceLogisticsTechnology.CurrentLevel > 0
-                && source != null
-                && destination != null
-                && InstantTransport.HasSubspaceWarper(source)
-                && source.isStellar
-                && destination.isStellar
-                && StationSettings.IsEnabled(source)
-                && StationSettings.IsEnabled(destination)
-                && source.gid != destination.gid
-                && itemId != SubspaceWarperContent.ItemId;
         }
     }
 
@@ -149,9 +155,11 @@ namespace SubspaceTransport
             ref bool __result)
         {
             int itemId = __instance.storage[pair.demandIndex].itemId;
-            if (!CanUseInstantTransport(__instance, other, itemId))
+
+            // The requesting station dispatches here, but the cargo (and the Subspace Warper) leaves from other.
+            if (!InstantTransport.CanTransfer(other, __instance, itemId))
             {
-                if (DetermineDispatchPatch.IsUsingVirtualDispatch(__instance))
+                if (DetermineDispatchPatch.IsVesselDispatchBlocked(__instance, takeWarper))
                 {
                     __result = false;
                     return false;
@@ -167,27 +175,9 @@ namespace SubspaceTransport
                 pair.demandIndex,
                 itemId,
                 shipCarries,
-                __instance,
                 consumeRegister);
 
             return false;
-        }
-
-        private static bool CanUseInstantTransport(
-            StationComponent requester,
-            StationComponent supplier,
-            int itemId)
-        {
-            return SubspaceLogisticsTechnology.CurrentLevel > 0
-                && requester != null
-                && supplier != null
-                && InstantTransport.HasSubspaceWarper(requester)
-                && requester.isStellar
-                && supplier.isStellar
-                && StationSettings.IsEnabled(requester)
-                && StationSettings.IsEnabled(supplier)
-                && requester.gid != supplier.gid
-                && itemId != SubspaceWarperContent.ItemId;
         }
     }
 
@@ -196,18 +186,12 @@ namespace SubspaceTransport
     {
         private static void Postfix(StationComponent __instance, ref long __result)
         {
-            if (!__instance.isStellar)
+            if (!SubspaceLogisticsTechnology.IsUnlocked || !StationSettings.IsEnabled(__instance))
             {
                 return;
             }
 
-            int level = SubspaceLogisticsTechnology.CurrentLevel;
-            if (level <= 0 || !StationSettings.IsEnabled(__instance))
-            {
-                return;
-            }
-
-            int multiplier = SubspaceLogisticsTechnology.GetEnergyMultiplier(level);
+            int multiplier = WormholeEfficiencyTechnology.EnergyMultiplier;
             if (multiplier > 1)
             {
                 __result = __result > long.MaxValue / multiplier
@@ -226,7 +210,6 @@ namespace SubspaceTransport
             int destinationIndex,
             int itemId,
             int maximumCount,
-            StationComponent transportStation,
             int[] consumeRegister)
         {
             if (source.storage == null
@@ -274,8 +257,15 @@ namespace SubspaceTransport
                         return false;
                     }
 
-                    if (!StationSettings.TryConsumeSubspaceWarper(transportStation))
+                    // The sending station pays by default; the receiving station pays when the sender has none.
+                    if (!StationSettings.TryConsumeSubspaceWarper(source)
+                        && !StationSettings.TryConsumeSubspaceWarper(destination))
                     {
+                        TransportDiagnostics.Once(
+                            source,
+                            "no-warper:" + destination.gid,
+                            "and station " + TransportDiagnostics.Describe(destination) +
+                            " have no Subspace Warpers left for a wormhole transfer.");
                         return false;
                     }
 
@@ -302,6 +292,55 @@ namespace SubspaceTransport
             }
 
             RecordTransfer(source, destination, itemId, transferredCount);
+            TransportDiagnostics.Once(
+                source,
+                "transfer:" + destination.gid,
+                "made its first wormhole transfer to station " + TransportDiagnostics.Describe(destination) +
+                " (" + transferredCount + " of item " + itemId + ").");
+            return true;
+        }
+
+        // Both endpoints must have Wormhole Transport enabled, and at least one must hold a Subspace Warper.
+        internal static bool CanTransfer(StationComponent source, StationComponent destination, int itemId)
+        {
+            if (!SubspaceLogisticsTechnology.IsUnlocked
+                || source == null
+                || destination == null
+                || source.gid == destination.gid
+                || itemId == SubspaceWarperContent.ItemId)
+            {
+                return false;
+            }
+
+            bool sourceEnabled = StationSettings.IsEnabled(source);
+            bool destinationEnabled = StationSettings.IsEnabled(destination);
+            if (!sourceEnabled && !destinationEnabled)
+            {
+                return false;
+            }
+
+            if (!sourceEnabled || !destinationEnabled)
+            {
+                StationComponent disabled = sourceEnabled ? destination : source;
+                StationComponent enabled = sourceEnabled ? source : destination;
+                TransportDiagnostics.Once(
+                    enabled,
+                    "partner-disabled:" + disabled.gid,
+                    "is paired with station " + TransportDiagnostics.Describe(disabled) +
+                    ", which does not have Wormhole Transport enabled, so they use logistics vessels.");
+                return false;
+            }
+
+            if (!HasSubspaceWarper(source) && !HasSubspaceWarper(destination))
+            {
+                TransportDiagnostics.Once(
+                    source,
+                    "no-warper:" + destination.gid,
+                    "and station " + TransportDiagnostics.Describe(destination) +
+                    " have no Subspace Warpers in their Subspace Warper slots, so no cargo moves by wormhole.");
+                return false;
+            }
+
             return true;
         }
 
@@ -353,6 +392,44 @@ namespace SubspaceTransport
             {
                 traffic.RegisterStarOutputStat(sourceStarId, itemId, count);
                 traffic.RegisterStarInputStat(destinationStarId, itemId, count);
+            }
+        }
+    }
+
+    // Logs each distinct wormhole transport problem once per station, so playtests show why cargo is not moving
+    // without flooding the log from the dispatch loop.
+    internal static class TransportDiagnostics
+    {
+        private static readonly object Sync = new object();
+        private static readonly HashSet<string> Logged = new HashSet<string>();
+
+        internal static void Once(StationComponent station, string key, string message)
+        {
+            string fullKey = station.gid + ":" + key;
+            lock (Sync)
+            {
+                if (!Logged.Add(fullKey))
+                {
+                    return;
+                }
+            }
+
+            Plugin.ModLogger?.LogInfo("Wormhole Transport: station " + Describe(station) + " " + message);
+        }
+
+        // Matches the Control Panel: planet name and the station's "#" number.
+        internal static string Describe(StationComponent station)
+        {
+            PlanetData planet = GameMain.galaxy != null ? GameMain.galaxy.PlanetById(station.planetId) : null;
+            string planetName = planet != null ? planet.displayName : "planet " + station.planetId;
+            return "#" + station.id + " on " + planetName;
+        }
+
+        internal static void Reset()
+        {
+            lock (Sync)
+            {
+                Logged.Clear();
             }
         }
     }

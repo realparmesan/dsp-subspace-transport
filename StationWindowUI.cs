@@ -129,7 +129,7 @@ namespace SubspaceTransport
             StationComponent station = GetCurrentStation(window);
             bool show = window.active
                 && StationSettings.IsWormholeStation(station)
-                && SubspaceLogisticsTechnology.CurrentLevel > 0;
+                && SubspaceLogisticsTechnology.IsUnlocked;
             _row.gameObject.SetActive(show);
             _slotBox.SetActive(show);
 
@@ -209,7 +209,8 @@ namespace SubspaceTransport
             _rowButton.tips.tipTitle = "Wormhole Transport";
             _rowButton.tips.tipText =
                 "Transfer cargo instantly with other enabled Interstellar Logistics Stations. " +
-                "Each transfer uses one Subspace Warper from the station's Subspace Warper slot.";
+                "Each transfer uses one Subspace Warper from the sending station, or from the receiving station " +
+                "if the sender has none.";
             _rowButton.onClick += OnRowClicked;
             return true;
         }
@@ -249,7 +250,7 @@ namespace SubspaceTransport
         private static void OnRowClicked(int _)
         {
             StationComponent station = GetCurrentStation(_window);
-            if (!StationSettings.IsWormholeStation(station) || SubspaceLogisticsTechnology.CurrentLevel <= 0)
+            if (!StationSettings.IsWormholeStation(station) || !SubspaceLogisticsTechnology.IsUnlocked)
             {
                 return;
             }

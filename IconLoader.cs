@@ -13,6 +13,7 @@ namespace SubspaceTransport
         private const string ResourcePrefix = "SubspaceTransport.Icons.";
 
         internal const string WormholeLogisticsTech = PathPrefix + "wormhole_logistics_tech";
+        internal const string WormholeEfficiencyTech = PathPrefix + "wormhole_efficiency_tech";
         internal const string BatterySphereEngineeringTech = PathPrefix + "battery_sphere_engineering_tech";
         internal const string SubspaceWarper = PathPrefix + "subspace_warper";
         internal const string BatteryRocket = PathPrefix + "battery_rocket";

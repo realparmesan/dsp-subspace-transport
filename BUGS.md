@@ -175,3 +175,33 @@ and `StationSettings.cs`. Check:
   identity;
 - whether the stations pair up for an instant transfer at all (both ends must
   have Wormhole Transport enabled, per REQUIREMENTS.md).
+
+## Resolution notes for #10–#13 (2026-10-14)
+
+- **#10:** Wormhole Logistics (1950) is now a single level. Its cost is copied at load time from the first
+  level of Dyson Sphere Stress System (1523): 360,000 hashes and all five matrices. Battery Sphere
+  Engineering (1951) copies Artificial Star (1144). The game data gives 432,000 hashes, 1,200 each of
+  *five* matrices including Gravity Matrix, not the four listed above. Wormhole Efficiency (1952, new)
+  has three levels on Stress System's cost curve and takes over the energy multiplier (8x → 4x → 2x → 1x).
+  Tree layout: Wormhole Logistics at +4 columns from Interstellar Logistics System, Battery Sphere
+  Engineering at +8 on the same row, Wormhole Efficiency at +8 one row below. These cells are empty in
+  vanilla. Saves from 0.6.0 dev builds that stored Wormhole Logistics as a four-level tech are converted
+  on load.
+- **#11 / #12:** `ControlPanelUI.cs`. #4 and #5 were already implemented (`StationWindowUI.cs`, and
+  `StationToggleUI.cs` was removed), so the Control Panel checkbox uses the same `StationSettings` value.
+  Positions are derived from the vanilla rows, because the prefab layout can't be checked outside the
+  game. Check them in game.
+- **#13:** Causes found:
+  1. Wormhole Logistics used `Level = 0, MaxLevel = 4`. In that case vanilla `GameHistoryData` only
+     increments `curLevel` and never sets `unlocked`, so `CurrentLevel` stayed 0 and every wormhole path
+     was off. Fixed by #10.
+  2. The virtual dispatch set `warperCount = 1` when the station had none. Vanilla still refuses a trip
+     past the warp distance with fewer than 2 warpers, or without warp drive research, when *Warpers
+     Required* is on. Wormhole dispatch now lifts *Warpers Required* instead, and still refuses vessel
+     trips that vanilla would refuse.
+  3. Demand-side dispatch required, and consumed, Subspace Warpers at the receiving station. Only the
+     sending station now needs and pays one.
+  4. Vanilla never makes remote pairs between two stations on the same planet. Test with stations on
+     different planets.
+  The first refusal or success of each kind per station is logged as `Wormhole Transport: station …` in
+  the BepInEx log.

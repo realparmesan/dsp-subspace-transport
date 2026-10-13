@@ -13,6 +13,8 @@ namespace SubspaceTransport
         internal const int ItemId = 11997;
         internal const int RecipeId = 11997;
 
+        // Research cost is copied from Artificial Star.
+        private const int CostReferenceTechnologyId = 1144;
         private const int SmallCarrierRocketItemId = 1503;
         private const int EnergyExchangerItemId = 2208;
 
@@ -20,11 +22,24 @@ namespace SubspaceTransport
         private const string DescriptionKey = "SubspaceTransport_BatteryRocketDescription";
         private const string RecipeNameKey = "SubspaceTransport_BatteryRocketRecipe";
 
+        private const string TechNameKey = "SubspaceTransport_BatterySphereEngineeringTech";
+        private const string TechDescriptionKey = "SubspaceTransport_BatterySphereEngineeringTechDescription";
+        private const string TechConclusionKey = "SubspaceTransport_BatterySphereEngineeringTechConclusion";
+
         internal static ManualLogSource Logger;
 
         // Must run from Awake; see SubspaceWarperContent.RegisterTranslations.
         internal static void RegisterTranslations()
         {
+            LocalizationModule.RegisterTranslation(TechNameKey, "Battery Sphere Engineering");
+            LocalizationModule.RegisterTranslation(
+                TechDescriptionKey,
+                "Construct a dedicated sphere project that charges accumulators for wormhole logistics.");
+            LocalizationModule.RegisterTranslation(
+                TechConclusionKey,
+                "Plan a Battery Sphere at a star in the Dyson Sphere editor, then launch Battery Rockets there. " +
+                "Its dedicated output charges empty accumulators, which enabled interstellar logistics stations " +
+                "can exchange for charged ones.");
             LocalizationModule.RegisterTranslation(NameKey, "Battery Rocket");
             LocalizationModule.RegisterTranslation(
                 DescriptionKey,
@@ -49,14 +64,17 @@ namespace SubspaceTransport
             }
 
             TechProto vanillaResearch = LDB.techs.Select(SubspaceLogisticsTechnology.InterstellarLogisticsTechnologyId);
+            TechProto costReference = LDB.techs.Select(CostReferenceTechnologyId);
             ItemProto carrierRocket = LDB.items.Select(SmallCarrierRocketItemId);
             if (vanillaResearch == null
+                || costReference?.Items == null
+                || costReference.ItemPoints == null
                 || carrierRocket == null
                 || LDB.items.Select(EnergyExchangerItemId) == null
                 || LDB.items.Select(SubspaceWarperContent.ItemId) == null)
             {
                 throw new InvalidOperationException(
-                    "Could not find the required research, rocket, Energy Exchanger, or Subspace Warper prototype.");
+                    "Could not find the required research, Artificial Star, rocket, Energy Exchanger, or Subspace Warper prototype.");
             }
 
             int gridIndex = Plugin.GetTabGridIndex(1, 1);
@@ -100,22 +118,19 @@ namespace SubspaceTransport
             TechProto technology = new TechProto
             {
                 ID = TechnologyId,
-                Name = "Battery Sphere Engineering",
-                Desc = "Construct a dedicated sphere project that charges accumulators for wormhole logistics.",
-                Conclusion =
-                    "Plan a Battery Sphere at a star in the Dyson Sphere editor, then launch Battery Rockets there. " +
-                    "Its dedicated output charges empty accumulators, which enabled interstellar logistics stations " +
-                    "can exchange for charged ones.",
+                Name = TechNameKey,
+                Desc = TechDescriptionKey,
+                Conclusion = TechConclusionKey,
                 IconPath = IconLoader.BatterySphereEngineeringTech,
                 IconTag = vanillaResearch.IconTag,
                 IsHiddenTech = false,
                 PreItem = Array.Empty<int>(),
-                Position = vanillaResearch.Position + new Vector2(8f, 2f),
+                Position = vanillaResearch.Position + new Vector2(8f, 0f),
                 PreTechs = new[] { SubspaceLogisticsTechnology.TechnologyId },
                 PreTechsImplicit = Array.Empty<int>(),
-                Items = (int[])vanillaResearch.Items.Clone(),
-                ItemPoints = (int[])vanillaResearch.ItemPoints.Clone(),
-                HashNeeded = vanillaResearch.HashNeeded,
+                Items = (int[])costReference.Items.Clone(),
+                ItemPoints = (int[])costReference.ItemPoints.Clone(),
+                HashNeeded = costReference.GetHashNeeded(costReference.Level),
                 UnlockRecipes = new[] { RecipeId },
                 UnlockFunctions = Array.Empty<int>(),
                 UnlockValues = Array.Empty<double>(),
@@ -133,6 +148,7 @@ namespace SubspaceTransport
             };
 
             LDBTool.PreAddProto(technology);
+            SubspaceLogisticsTechnology.RequireRegisteredId(technology, TechnologyId);
             Logger.LogInfo("Registered the Battery Rocket, recipe, and technology.");
         }
 
@@ -147,16 +163,7 @@ namespace SubspaceTransport
 
         internal static bool IsUnlocked
         {
-            get
-            {
-                GameHistoryData history = GameMain.data != null ? GameMain.data.history : GameMain.history;
-                if (history?.techStates == null || !history.techStates.ContainsKey(TechnologyId))
-                {
-                    return false;
-                }
-
-                return history.TechState(TechnologyId).unlocked;
-            }
+            get { return SubspaceLogisticsTechnology.IsTechUnlocked(TechnologyId); }
         }
     }
 }

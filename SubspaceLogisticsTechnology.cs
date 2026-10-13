@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using BepInEx.Logging;
+using CommonAPI.Systems.ModLocalization;
+using HarmonyLib;
 using UnityEngine;
 using xiaoye97;
 
@@ -11,10 +13,33 @@ namespace SubspaceTransport
         // Vanilla uses 1901-1904 and More Megastructures uses 1918-1931, so this mod's techs sit at 1950+.
         internal const int TechnologyId = 1950;
         internal const int InterstellarLogisticsTechnologyId = 1605;
-        internal const int VeinUtilizationTechnologyId = 1606;
-        internal const int MaximumLevel = 4;
+
+        // Research cost is copied from the first level of Dyson Sphere Stress System.
+        internal const int CostReferenceTechnologyId = 1523;
+
+        // LDBTool pins each proto's ID in LDBTool.CustomID.cfg under its Name, so these keys must not be
+        // reused with a different ID. (0.5.x used the English names at IDs 1919/1920.)
+        private const string NameKey = "SubspaceTransport_WormholeLogisticsTech";
+        private const string DescriptionKey = "SubspaceTransport_WormholeLogisticsTechDescription";
+        private const string ConclusionKey = "SubspaceTransport_WormholeLogisticsTechConclusion";
 
         internal static ManualLogSource Logger;
+
+        // Must run from Awake; see SubspaceWarperContent.RegisterTranslations.
+        internal static void RegisterTranslations()
+        {
+            LocalizationModule.RegisterTranslation(NameKey, "Wormhole Logistics");
+            LocalizationModule.RegisterTranslation(
+                DescriptionKey,
+                "Instantly transfer cargo between interstellar logistics stations.");
+            LocalizationModule.RegisterTranslation(
+                ConclusionKey,
+                "Interstellar logistics stations can transfer cargo through wormholes without logistics vessels. " +
+                "Enable Wormhole Transport in each station's settings. Each transfer consumes one Subspace Warper " +
+                "from the sending station, or from the receiving station if the sender has none, " +
+                "and still requires station power. " +
+                "Research Wormhole Efficiency to reduce the energy cost.");
+        }
 
         internal static void Register()
         {
@@ -38,23 +63,14 @@ namespace SubspaceTransport
                     "The Interstellar Logistics System technology has no research cost data.");
             }
 
-            TechProto veinUtil = LDB.techs.Select(VeinUtilizationTechnologyId);
-            int[] items = veinUtil?.Items != null ? (int[])veinUtil.Items.Clone() : (int[])prerequisite.Items.Clone();
-            int[] itemPoints = veinUtil?.ItemPoints != null ? (int[])veinUtil.ItemPoints.Clone() : (int[])prerequisite.ItemPoints.Clone();
-            long hashNeeded = veinUtil != null && veinUtil.HashNeeded > 0 ? veinUtil.HashNeeded : prerequisite.HashNeeded;
-            int levelCoef1 = veinUtil != null ? veinUtil.LevelCoef1 : 0;
-            int levelCoef2 = veinUtil != null ? veinUtil.LevelCoef2 : 0;
+            TechProto costReference = GetCostReference();
 
             TechProto technology = new TechProto
             {
                 ID = TechnologyId,
-                Name = "Wormhole Logistics",
-                Desc = "Instantly transfer cargo between interstellar logistics stations.",
-                Conclusion =
-                    "Interstellar logistics stations can transfer cargo through wormholes without logistics vessels. " +
-                    "Enable Wormhole Transport in each station's settings. Each transfer consumes one Subspace Warper " +
-                    "and still requires station power. " +
-                    "Each research level halves the energy cost, down to the normal trip cost.",
+                Name = NameKey,
+                Desc = DescriptionKey,
+                Conclusion = ConclusionKey,
                 IconPath = IconLoader.WormholeLogisticsTech,
                 IconTag = prerequisite.IconTag,
                 IsHiddenTech = false,
@@ -62,17 +78,17 @@ namespace SubspaceTransport
                 Position = prerequisite.Position + new Vector2(4f, 0f),
                 PreTechs = new[] { InterstellarLogisticsTechnologyId },
                 PreTechsImplicit = Array.Empty<int>(),
-                Items = items,
-                ItemPoints = itemPoints,
-                HashNeeded = hashNeeded,
+                Items = (int[])costReference.Items.Clone(),
+                ItemPoints = (int[])costReference.ItemPoints.Clone(),
+                HashNeeded = costReference.GetHashNeeded(costReference.Level),
                 UnlockRecipes = new[] { SubspaceWarperContent.RecipeId },
                 UnlockFunctions = Array.Empty<int>(),
                 UnlockValues = Array.Empty<double>(),
                 Published = true,
                 Level = 0,
-                MaxLevel = MaximumLevel,
-                LevelCoef1 = levelCoef1,
-                LevelCoef2 = levelCoef2,
+                MaxLevel = 0,
+                LevelCoef1 = 0,
+                LevelCoef2 = 0,
                 IsLabTech = true,
                 PreTechsMax = false,
                 AddItems = Array.Empty<int>(),
@@ -82,7 +98,21 @@ namespace SubspaceTransport
             };
 
             LDBTool.PreAddProto(technology);
+            RequireRegisteredId(technology, TechnologyId);
             Logger.LogInfo("Registered the Wormhole Logistics research technology.");
+        }
+
+        internal static TechProto GetCostReference()
+        {
+            TechProto costReference = LDB.techs.Select(CostReferenceTechnologyId);
+            if (costReference?.Items == null || costReference.ItemPoints == null)
+            {
+                throw new InvalidOperationException(
+                    "Could not find the research cost of the Dyson Sphere Stress System technology (" +
+                    CostReferenceTechnologyId + ").");
+            }
+
+            return costReference;
         }
 
         internal static void LinkTechnologyTree()
@@ -116,6 +146,18 @@ namespace SubspaceTransport
                     : GameMain.history);
         }
 
+        // LDBTool.PreAddProto replaces the ID with any value saved in LDBTool.CustomID.cfg.
+        internal static void RequireRegisteredId(Proto proto, int expectedId)
+        {
+            if (proto.ID != expectedId)
+            {
+                throw new InvalidOperationException(
+                    "LDBTool assigned ID " + proto.ID + " to '" + proto.Name + "', but this mod requires ID " +
+                    expectedId + ". Remove the '" + proto.Name + "' entry from BepInEx/config/LDBTool/" +
+                    "LDBTool.CustomID.cfg and restart the game.");
+            }
+        }
+
         internal static void EnsureTechState(GameHistoryData history, int technologyId = TechnologyId)
         {
             if (history?.techStates == null || history.techStates.ContainsKey(technologyId))
@@ -141,36 +183,62 @@ namespace SubspaceTransport
                     0));
         }
 
-        internal static int GetEnergyMultiplier(int technologyLevel)
+        internal static bool IsUnlocked
         {
-            if (technologyLevel <= 0)
-            {
-                return 8;
-            }
-
-            if (technologyLevel >= MaximumLevel)
-            {
-                return 1;
-            }
-
-            return 8 >> (technologyLevel - 1);
+            get { return IsTechUnlocked(TechnologyId); }
         }
 
-        internal static int CurrentLevel
+        internal static bool IsTechUnlocked(int technologyId)
         {
-            get
+            GameHistoryData history = GameMain.data != null ? GameMain.data.history : GameMain.history;
+            if (history?.techStates == null || !history.techStates.ContainsKey(technologyId))
             {
-                if (GameMain.data == null
-                    || GameMain.data.history == null
-                    || GameMain.data.history.techStates == null
-                    || !GameMain.data.history.techStates.ContainsKey(TechnologyId))
-                {
-                    return 0;
-                }
-
-                TechState state = GameMain.data.history.TechState(TechnologyId);
-                return state.unlocked ? state.curLevel : 0;
+                return false;
             }
+
+            return history.TechState(technologyId).unlocked;
+        }
+
+        // 0.6.0 development builds saved Wormhole Logistics with four levels, which never set it unlocked
+        // because the levels started at 0. Saved tech states keep their max level, so convert them here.
+        internal static void MigrateTechState(GameHistoryData history)
+        {
+            TechProto technology = LDB.techs.Select(TechnologyId);
+            if (history?.techStates == null
+                || technology == null
+                || !history.techStates.ContainsKey(TechnologyId))
+            {
+                return;
+            }
+
+            TechState state = history.techStates[TechnologyId];
+            if (state.maxLevel == technology.MaxLevel)
+            {
+                return;
+            }
+
+            bool researched = state.unlocked || state.curLevel > technology.Level;
+            state.maxLevel = technology.MaxLevel;
+            state.curLevel = technology.Level;
+            state.hashNeeded = technology.GetHashNeeded(technology.Level);
+            state.hashUploaded = Math.Min(state.hashUploaded, state.hashNeeded);
+            state.unlocked = false;
+            history.techStates[TechnologyId] = state;
+            if (researched)
+            {
+                history.UnlockTech(TechnologyId);
+            }
+
+            Logger.LogInfo("Converted the saved Wormhole Logistics research to a single level.");
+        }
+    }
+
+    [HarmonyPatch(typeof(GameHistoryData), "Import")]
+    internal static class WormholeLogisticsTechStateMigrationPatch
+    {
+        private static void Postfix(GameHistoryData __instance)
+        {
+            SubspaceLogisticsTechnology.MigrateTechState(__instance);
         }
     }
 }
