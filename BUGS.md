@@ -9,6 +9,7 @@ New icons for these fixes are in `assets/icons/` (all 80×80 RGBA PNG):
 | File | Used for |
 | --- | --- |
 | `wormhole_logistics_tech.png` | Wormhole Logistics tech icon (white glyph, vanilla tech-icon format) |
+| `wormhole_efficiency_tech.png` | New Wormhole Efficiency tech icon (variant of the Wormhole Logistics glyph; see #10) |
 | `battery_sphere_engineering_tech.png` | Battery Sphere Engineering tech icon (white glyph) |
 | `subspace_warper.png` | Subspace Warper item (violet recolour of the vanilla Space Warper) |
 | `battery_rocket.png` | Battery Rocket item (charcoal recolour of the Small Carrier Rocket) |
@@ -112,3 +113,65 @@ It's currently listed under *Buildings* in the Icarus replicator. Remove it
 from the replicator completely; it should only appear on the More
 Megastructures tab (#8). This replaces earlier notes asking for it to sit
 under the replicator's *Items* category or below the Space Warper recipes.
+
+## 10. Wormhole Logistics becomes a single-level tech that branches
+
+Remove the multiple levels from Wormhole Logistics (`MaximumLevel = 4` in
+`SubspaceLogisticsTechnology.cs`). Researching it unlocks two new techs:
+
+- **Battery Sphere Engineering**: prerequisite is Wormhole Logistics. Its
+  research cost matches **Artificial Star**: 432,000 hashes, 1,200 each of
+  Electromagnetic, Energy, Structure and Information Matrix. Copy the real
+  values from the vanilla Artificial Star tech rather than hard-coding these.
+- **Wormhole Efficiency** (new): prerequisite is Wormhole Logistics. Use
+  `wormhole_efficiency_tech.png`. It should take over the energy-cost
+  reduction that the old extra levels provided (`GetEnergyMultiplier`).
+
+Also raise Wormhole Logistics' own research cost to roughly the **Dyson Sphere
+Stress System** tech (research cost only, not the recipe cost). Take the exact
+figures from the game data. Lay out the tree so Battery Sphere Engineering and
+Wormhole Efficiency both branch off Wormhole Logistics without overlapping
+(Battery Sphere Engineering currently overlaps it slightly; see
+REQUIREMENTS.md).
+
+## 11. Control panel: Subspace Warper rows
+
+In the Control Panel (not the individual station window; #6 covers that):
+
+- **Left side:** the list currently has one row each for Logistics Drones,
+  Interstellar Logistics Vessels and Space Warpers. Add a fourth row for
+  **Subspace Warpers**.
+- **Right side:** the compact station summary mirrors the station window with
+  three icons. Add a row below them for Subspace Warpers, as in the station
+  window.
+
+## 12. Control panel: Wormhole Transport toggle
+
+Add the Wormhole Transport enable/disable checkbox to the Control Panel's
+settings tab on the right, directly under the **outgoing integration count**
+row of Station Settings. This is the same place as in the Interstellar Station
+window. It must read and write the same per-station setting as #4 and #5
+(`StationSettings.cs`), not a second copy. Not yet confirmed whether #4 or #5
+are implemented at all, so verify first.
+
+## 13. Wormhole transport does not move any items
+
+Test setup: two Interstellar Logistics Stations.
+
+- Station A: Local and Remote **provider** for the item.
+- Station B: Local and Remote **receiver** for the item.
+- Both have Wormhole Transport enabled and hold Subspace Warpers and the
+  items' components. Per the design, only the sending station needs Subspace
+  Warpers. The receiver doesn't consume any, and it isn't.
+
+No items move between the stations at all, so neither the wormhole path nor
+normal vessel flow appears to be firing. Investigate `InstantTransportPatches.cs`
+and `StationSettings.cs`. Check:
+
+- whether the toggle value is actually read at transfer time;
+- whether the patch targets and conditions are ever reached (add logging);
+- whether the Subspace Warper item is found in the station's dedicated slot
+  (#6), since the module is currently stored under its old Hyperdrive Module
+  identity;
+- whether the stations pair up for an instant transfer at all (both ends must
+  have Wormhole Transport enabled, per REQUIREMENTS.md).
