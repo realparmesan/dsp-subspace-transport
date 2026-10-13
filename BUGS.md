@@ -76,6 +76,15 @@ vessels and Space Warpers. Add a **Subspace Warper** slot:
   taken from a storage row, the same way Space Warpers are, since wormhole
   transport consumes them.
 
+## Resolution notes
+
+#7 and #8 were implemented **without** a More Megastructures dependency (decided 2026-10-14): the
+Dyson Sphere editor has the mod's own *Megastructure type* selector (Dyson Sphere / Battery Sphere,
+with Stellar Hyper Mass to follow), and the new items sit on the mod's own *Wormhole Logistics* tab
+(Battery Rocket row 1, Subspace Warper row 2). More Megastructures stays an optional, compatible mod: tech IDs moved
+to 1950/1951 (it uses 1918-1931 and ties recipes to 1919), and a star can't be both a Battery Sphere
+and a More Megastructures structure.
+
 ## 7. Can't choose a megastructure type in the Dyson Sphere editor (Y)
 
 Pressing Y opens the editor and some "battery sphere project" text appears,

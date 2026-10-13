@@ -45,7 +45,7 @@ namespace SubspaceTransport
                 Object.Destroy(buttonObject);
                 _button = null;
                 _buttonText = null;
-                Plugin.ModLogger.LogError("The Battery Sphere silo toggle template is missing its button or text component.");
+                Plugin.ModLogger.LogError("The Battery Rocket silo toggle template is missing its button or text component.");
                 return;
             }
 
@@ -65,7 +65,8 @@ namespace SubspaceTransport
 
             _button.tips.tipTitle = "Battery Sphere";
             _button.tips.tipText =
-                "Select Battery Sphere Rockets for this silo. Empty the silo before switching rocket types.";
+                "Load Battery Rockets in this silo. They launch only at a star with a Battery Sphere planned in the " +
+                "Dyson Sphere editor. Empty the silo before switching rocket types.";
             _button.onClick -= OnToggleClicked;
             _button.onClick += OnToggleClicked;
             Refresh(siloWindow);
@@ -91,8 +92,8 @@ namespace SubspaceTransport
 
             _button.gameObject.SetActive(true);
             string label = silo.bulletId == BatterySphereContent.ItemId
-                ? "Rocket: Battery Sphere"
-                : "Rocket: Dyson Sphere";
+                ? "Rocket: Battery Rocket"
+                : "Rocket: Carrier Rocket";
             if (_buttonText != null && _buttonText.text != label)
             {
                 _buttonText.text = label;
@@ -122,7 +123,8 @@ namespace SubspaceTransport
             siloWindow.factorySystem.siloPool[siloWindow.siloId] = silo;
             siloWindow.SyncServingStorage();
             _button.tips.tipText =
-                "Select Battery Sphere Rockets for this silo. Empty the silo before switching rocket types.";
+                "Load Battery Rockets in this silo. They launch only at a star with a Battery Sphere planned in the " +
+                "Dyson Sphere editor. Empty the silo before switching rocket types.";
             Refresh(siloWindow);
         }
 

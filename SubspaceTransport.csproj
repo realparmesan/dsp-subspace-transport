@@ -56,10 +56,18 @@
       <HintPath>$(DSPGameDataDir)/Managed/UnityEngine.UIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule">
+      <HintPath>$(DSPGameDataDir)/Managed/UnityEngine.ImageConversionModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.TextRenderingModule">
       <HintPath>$(DSPGameDataDir)/Managed/UnityEngine.TextRenderingModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="assets/icons/*.png" LogicalName="SubspaceTransport.Icons.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <Target Name="ValidateGameReferences" BeforeTargets="ResolveReferences">
@@ -73,6 +81,7 @@
     <Error Condition="!Exists('$(DSPGameDataDir)/Managed/UnityEngine.CoreModule.dll')" Text="Unity assemblies not found under $(DSPGameDataDir)/Managed." />
     <Error Condition="!Exists('$(DSPGameDataDir)/Managed/UnityEngine.UI.dll')" Text="Unity UI assembly not found under $(DSPGameDataDir)/Managed." />
     <Error Condition="!Exists('$(DSPGameDataDir)/Managed/UnityEngine.UIModule.dll')" Text="Unity UI module assembly not found under $(DSPGameDataDir)/Managed." />
+    <Error Condition="!Exists('$(DSPGameDataDir)/Managed/UnityEngine.ImageConversionModule.dll')" Text="Unity image conversion assembly not found under $(DSPGameDataDir)/Managed." />
     <Error Condition="!Exists('$(DSPGameDataDir)/Managed/UnityEngine.TextRenderingModule.dll')" Text="Unity text rendering assembly not found under $(DSPGameDataDir)/Managed." />
   </Target>
 </Project>

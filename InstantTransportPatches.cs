@@ -30,7 +30,7 @@ namespace SubspaceTransport
             if (SubspaceLogisticsTechnology.CurrentLevel > 0
                 && __instance.isStellar
                 && StationSettings.IsEnabled(__instance)
-                && InstantTransport.HasHyperdriveModule(__instance))
+                && InstantTransport.HasSubspaceWarper(__instance))
             {
                 if (__state.OriginalIdleShipCount == 0)
                 {
@@ -126,13 +126,13 @@ namespace SubspaceTransport
             return SubspaceLogisticsTechnology.CurrentLevel > 0
                 && source != null
                 && destination != null
-                && InstantTransport.HasHyperdriveModule(source)
+                && InstantTransport.HasSubspaceWarper(source)
                 && source.isStellar
                 && destination.isStellar
                 && StationSettings.IsEnabled(source)
                 && StationSettings.IsEnabled(destination)
                 && source.gid != destination.gid
-                && itemId != HyperdriveModuleContent.ItemId;
+                && itemId != SubspaceWarperContent.ItemId;
         }
     }
 
@@ -181,13 +181,13 @@ namespace SubspaceTransport
             return SubspaceLogisticsTechnology.CurrentLevel > 0
                 && requester != null
                 && supplier != null
-                && InstantTransport.HasHyperdriveModule(requester)
+                && InstantTransport.HasSubspaceWarper(requester)
                 && requester.isStellar
                 && supplier.isStellar
                 && StationSettings.IsEnabled(requester)
                 && StationSettings.IsEnabled(supplier)
                 && requester.gid != supplier.gid
-                && itemId != HyperdriveModuleContent.ItemId;
+                && itemId != SubspaceWarperContent.ItemId;
         }
     }
 
@@ -261,12 +261,6 @@ namespace SubspaceTransport
                         return false;
                     }
 
-                    int moduleIndex = FindHyperdriveModule(transportStation.storage);
-                    if (moduleIndex < 0)
-                    {
-                        return false;
-                    }
-
                     int sourceAvailable = Math.Min(sourceStore.count, sourceStore.remoteSupplyCount);
                     int destinationDemand = Math.Min(
                         destinationStore.remoteDemandCount,
@@ -276,6 +270,11 @@ namespace SubspaceTransport
                         Math.Min(sourceAvailable, destinationDemand));
 
                     if (transferredCount <= 0)
+                    {
+                        return false;
+                    }
+
+                    if (!StationSettings.TryConsumeSubspaceWarper(transportStation))
                     {
                         return false;
                     }
@@ -290,17 +289,13 @@ namespace SubspaceTransport
                     destinationStore.count += transferredCount;
                     destinationStore.inc += transferredInc;
 
-                    StationStore moduleStore = transportStation.storage[moduleIndex];
-                    moduleStore.count--;
-                    moduleStore.inc -= SplitInc(moduleStore.count + 1, moduleStore.inc, 1);
-                    transportStation.storage[moduleIndex] = moduleStore;
                     source.storage[sourceIndex] = sourceStore;
                     destination.storage[destinationIndex] = destinationStore;
-                    if (consumeRegister != null && consumeRegister.Length > HyperdriveModuleContent.ItemId)
+                    if (consumeRegister != null && consumeRegister.Length > SubspaceWarperContent.ItemId)
                     {
                         lock (consumeRegister)
                         {
-                            consumeRegister[HyperdriveModuleContent.ItemId]++;
+                            consumeRegister[SubspaceWarperContent.ItemId]++;
                         }
                     }
                 }
@@ -310,35 +305,9 @@ namespace SubspaceTransport
             return true;
         }
 
-        internal static bool HasHyperdriveModule(StationComponent station)
+        internal static bool HasSubspaceWarper(StationComponent station)
         {
-            if (station?.storage == null)
-            {
-                return false;
-            }
-
-            lock (station.storage)
-            {
-                return FindHyperdriveModule(station.storage) >= 0;
-            }
-        }
-
-        private static int FindHyperdriveModule(StationStore[] storage)
-        {
-            if (storage == null)
-            {
-                return -1;
-            }
-
-            for (int i = 0; i < storage.Length; i++)
-            {
-                if (storage[i].itemId == HyperdriveModuleContent.ItemId && storage[i].count > 0)
-                {
-                    return i;
-                }
-            }
-
-            return -1;
+            return StationSettings.GetSubspaceWarperCount(station) > 0;
         }
 
         private static int SplitInc(int count, int inc, int transferCount)

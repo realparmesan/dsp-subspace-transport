@@ -13,17 +13,23 @@ namespace SubspaceTransport
     [BepInDependency(LDBToolPlugin.MODGUID)]
     [BepInDependency(DSPModSavePlugin.MODGUID)]
     [BepInDependency("dsp.common-api.CommonAPI")]
-    [CommonAPISubmoduleDependency(nameof(ProtoRegistry), nameof(LocalizationModule))]
+    [BepInDependency(MoreMegaStructureCompat.PluginGuid, BepInDependency.DependencyFlags.SoftDependency)]
+    [CommonAPISubmoduleDependency(nameof(ProtoRegistry), nameof(LocalizationModule), nameof(TabSystem))]
     [BepInProcess("DSPGAME.exe")]
     [BepInProcess("Dyson Sphere Program.exe")]
     public sealed class Plugin : BaseUnityPlugin, IModCanSave
     {
         public const string PluginGuid = "realparmesan.dsp.subspacetransport";
         public const string PluginName = "Wormhole Logistics";
-        public const string PluginVersion = "0.5.3";
+        public const string PluginVersion = "0.6.0";
+
+        private const string TabId = "WormholeLogistics:WormholeLogisticsTab";
 
         internal static Plugin Log { get; private set; }
         internal static BepInEx.Logging.ManualLogSource ModLogger { get; private set; }
+
+        // Replicator and recipe-picker page that holds this mod's items.
+        internal static int TabPage { get; private set; }
 
         private Harmony _harmony;
 
@@ -33,21 +39,27 @@ namespace SubspaceTransport
             ModLogger = Logger;
             SubspaceLogisticsTechnology.Logger = Logger;
             BatterySphereContent.Logger = Logger;
+            TabPage = TabSystem.RegisterTab(
+                TabId,
+                new TabData("Wormhole Logistics", IconLoader.WormholeLogisticsTech));
+            SubspaceWarperContent.RegisterTranslations();
+            BatterySphereContent.RegisterTranslations();
             LDBTool.PreAddDataAction += SubspaceLogisticsTechnology.Register;
-            LDBTool.PreAddDataAction += HyperdriveModuleContent.Register;
+            LDBTool.PreAddDataAction += SubspaceWarperContent.Register;
             LDBTool.PreAddDataAction += BatterySphereContent.Register;
             LDBTool.PostAddDataAction += SubspaceLogisticsTechnology.LinkTechnologyTree;
             LDBTool.PostAddDataAction += BatterySphereContent.LinkTechnologyTree;
 
             _harmony = new Harmony(PluginGuid);
             _harmony.PatchAll();
+            MoreMegaStructureCompat.Initialize(_harmony);
             Logger.LogInfo(PluginName + " " + PluginVersion + " loaded.");
         }
 
         private void OnDestroy()
         {
             LDBTool.PreAddDataAction -= SubspaceLogisticsTechnology.Register;
-            LDBTool.PreAddDataAction -= HyperdriveModuleContent.Register;
+            LDBTool.PreAddDataAction -= SubspaceWarperContent.Register;
             LDBTool.PreAddDataAction -= BatterySphereContent.Register;
             LDBTool.PostAddDataAction -= SubspaceLogisticsTechnology.LinkTechnologyTree;
             LDBTool.PostAddDataAction -= BatterySphereContent.LinkTechnologyTree;
@@ -57,6 +69,11 @@ namespace SubspaceTransport
                 Log = null;
                 ModLogger = null;
             }
+        }
+
+        internal static int GetTabGridIndex(int row, int column)
+        {
+            return TabPage * 1000 + row * 100 + column;
         }
 
         public void Export(BinaryWriter writer)

@@ -8,7 +8,8 @@ namespace SubspaceTransport
 {
     internal static class SubspaceLogisticsTechnology
     {
-        internal const int TechnologyId = 1919;
+        // Vanilla uses 1901-1904 and More Megastructures uses 1918-1931, so this mod's techs sit at 1950+.
+        internal const int TechnologyId = 1950;
         internal const int InterstellarLogisticsTechnologyId = 1605;
         internal const int VeinUtilizationTechnologyId = 1606;
         internal const int MaximumLevel = 4;
@@ -51,9 +52,10 @@ namespace SubspaceTransport
                 Desc = "Instantly transfer cargo between interstellar logistics stations.",
                 Conclusion =
                     "Interstellar logistics stations can transfer cargo through wormholes without logistics vessels. " +
-                    "Transfers still require station power. " +
+                    "Enable Wormhole Transport in each station's settings. Each transfer consumes one Subspace Warper " +
+                    "and still requires station power. " +
                     "Each research level halves the energy cost, down to the normal trip cost.",
-                IconPath = prerequisite.IconPath,
+                IconPath = IconLoader.WormholeLogisticsTech,
                 IconTag = prerequisite.IconTag,
                 IsHiddenTech = false,
                 PreItem = Array.Empty<int>(),
@@ -63,7 +65,7 @@ namespace SubspaceTransport
                 Items = items,
                 ItemPoints = itemPoints,
                 HashNeeded = hashNeeded,
-                UnlockRecipes = new[] { HyperdriveModuleContent.RecipeId },
+                UnlockRecipes = new[] { SubspaceWarperContent.RecipeId },
                 UnlockFunctions = Array.Empty<int>(),
                 UnlockValues = Array.Empty<double>(),
                 Published = true,

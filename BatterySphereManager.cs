@@ -2,14 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using HarmonyLib;
-using UnityEngine;
-using UnityEngine.UI;
 
 namespace SubspaceTransport
 {
     internal static class BatterySphereManager
     {
-        private const int SaveFormatVersion = 1;
+        private const int LegacySaveFormatVersion = 1;
+        private const int SaveFormatVersion = 2;
         private const int MaximumSavedStars = 10000;
         private const int MaximumProjectRockets = 1000000;
         private const int MaximumBatteryBuffer = 100000;
@@ -22,6 +21,10 @@ namespace SubspaceTransport
         private sealed class StarProject
         {
             internal int RocketCount;
+
+            // Set from the Dyson Sphere editor. Rockets only launch to, and output only counts for, planned stars;
+            // switching a star back to a Dyson Sphere keeps its rockets for when it is planned again.
+            internal bool Planned;
         }
 
         private static readonly object Sync = new object();
@@ -36,7 +39,7 @@ namespace SubspaceTransport
         {
             if (starIndex < 0)
             {
-                Plugin.ModLogger.LogWarning("Ignored a Battery Sphere Rocket launched without a valid star.");
+                Plugin.ModLogger.LogWarning("Ignored a Battery Rocket launched without a valid star.");
                 return;
             }
 
@@ -52,6 +55,44 @@ namespace SubspaceTransport
                 if (project.RocketCount < MaximumProjectRockets)
                 {
                     project.RocketCount++;
+                }
+            }
+        }
+
+        internal static bool IsPlanned(int starIndex)
+        {
+            lock (Sync)
+            {
+                StarProject project;
+                return Projects.TryGetValue(starIndex, out project) && project.Planned;
+            }
+        }
+
+        internal static void SetPlanned(int starIndex, bool planned)
+        {
+            if (starIndex < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(starIndex));
+            }
+
+            lock (Sync)
+            {
+                StarProject project;
+                if (!Projects.TryGetValue(starIndex, out project))
+                {
+                    if (!planned)
+                    {
+                        return;
+                    }
+
+                    project = new StarProject();
+                    Projects.Add(starIndex, project);
+                }
+
+                project.Planned = planned;
+                if (!planned && project.RocketCount == 0)
+                {
+                    Projects.Remove(starIndex);
                 }
             }
         }
@@ -120,6 +161,7 @@ namespace SubspaceTransport
                 {
                     writer.Write(entry.Key);
                     writer.Write(entry.Value.RocketCount);
+                    writer.Write(entry.Value.Planned);
                 }
 
                 writer.Write(_emptyAccumulatorCount);
@@ -132,7 +174,7 @@ namespace SubspaceTransport
         internal static void Import(BinaryReader reader)
         {
             int version = reader.ReadInt32();
-            if (version != SaveFormatVersion)
+            if (version != SaveFormatVersion && version != LegacySaveFormatVersion)
             {
                 throw new InvalidDataException("Unsupported Battery Sphere save format: " + version + ".");
             }
@@ -148,12 +190,15 @@ namespace SubspaceTransport
             {
                 int starIndex = reader.ReadInt32();
                 int rocketCount = reader.ReadInt32();
+
+                // Saves from before sphere planning existed treat every star with rockets as planned.
+                bool planned = version >= SaveFormatVersion ? reader.ReadBoolean() : rocketCount > 0;
                 if (starIndex < 0 || rocketCount < 0 || rocketCount > MaximumProjectRockets)
                 {
                     throw new InvalidDataException("Invalid Battery Sphere project data.");
                 }
 
-                loadedProjects[starIndex] = new StarProject { RocketCount = rocketCount };
+                loadedProjects[starIndex] = new StarProject { RocketCount = rocketCount, Planned = planned };
             }
 
             int emptyCount = reader.ReadInt32();
@@ -202,8 +247,8 @@ namespace SubspaceTransport
             long rocketCount = 0;
             foreach (KeyValuePair<int, StarProject> entry in Projects)
             {
-                if (GameMain.galaxy != null
-                    && entry.Key >= GameMain.galaxy.starCount)
+                if (!entry.Value.Planned
+                    || (GameMain.galaxy != null && entry.Key >= GameMain.galaxy.starCount))
                 {
                     continue;
                 }
@@ -266,9 +311,10 @@ namespace SubspaceTransport
                         int transferCount = Math.Min(
                             MaximumTransferCount,
                             Math.Min(supplyCount, MaximumBatteryBuffer - _emptyAccumulatorCount));
-                        int moduleIndex = FindHyperdriveModule(station.storage);
                         long energyCost = station.CalcTripEnergyCost(0.0, shipWarpSpeed, true);
-                        if (transferCount <= 0 || moduleIndex < 0 || station.energy < energyCost)
+                        if (transferCount <= 0
+                            || station.energy < energyCost
+                            || !StationSettings.TryConsumeSubspaceWarper(station))
                         {
                             continue;
                         }
@@ -277,7 +323,6 @@ namespace SubspaceTransport
                         store.count -= transferCount;
                         store.inc -= transferredInc;
                         station.storage[storageIndex] = store;
-                        ConsumeModule(station.storage, moduleIndex);
                         station.energy -= energyCost;
                         _emptyAccumulatorCount += transferCount;
                         traffic?.RegisterPlanetOutputStat(station.planetId, ItemProto.kAccumulator, transferCount);
@@ -335,16 +380,16 @@ namespace SubspaceTransport
                         int transferCount = Math.Min(
                             MaximumTransferCount,
                             Math.Min(store.remoteDemandCount, _chargedAccumulatorCount));
-                        int moduleIndex = FindHyperdriveModule(station.storage);
                         long energyCost = station.CalcTripEnergyCost(0.0, shipWarpSpeed, true);
-                        if (transferCount <= 0 || moduleIndex < 0 || station.energy < energyCost)
+                        if (transferCount <= 0
+                            || station.energy < energyCost
+                            || !StationSettings.TryConsumeSubspaceWarper(station))
                         {
                             continue;
                         }
 
                         store.count += transferCount;
                         station.storage[storageIndex] = store;
-                        ConsumeModule(station.storage, moduleIndex);
                         station.energy -= energyCost;
                         _chargedAccumulatorCount -= transferCount;
                         traffic?.RegisterPlanetInputStat(
@@ -364,28 +409,7 @@ namespace SubspaceTransport
                 && station.isStellar
                 && station.storage != null
                 && StationSettings.IsEnabled(station)
-                && InstantTransport.HasHyperdriveModule(station);
-        }
-
-        private static int FindHyperdriveModule(StationStore[] storage)
-        {
-            for (int i = 0; i < storage.Length; i++)
-            {
-                if (storage[i].itemId == HyperdriveModuleContent.ItemId && storage[i].count > 0)
-                {
-                    return i;
-                }
-            }
-
-            return -1;
-        }
-
-        private static void ConsumeModule(StationStore[] storage, int moduleIndex)
-        {
-            StationStore module = storage[moduleIndex];
-            module.count--;
-            module.inc -= SplitInc(module.count + 1, module.inc, 1);
-            storage[moduleIndex] = module;
+                && InstantTransport.HasSubspaceWarper(station);
         }
 
         private static int SplitInc(int count, int inc, int transferCount)
@@ -408,48 +432,73 @@ namespace SubspaceTransport
     [HarmonyPatch(typeof(SiloComponent), "InternalUpdate")]
     internal static class BatterySphereSiloLaunchPatch
     {
+        private enum LaunchMode
+        {
+            Vanilla,
+            Capture,
+            Block
+        }
+
         [ThreadStatic]
-        private static bool _batteryRocketLaunch;
+        private static LaunchMode _mode;
 
         [ThreadStatic]
         private static int _launchStarIndex;
 
+        private struct SiloState
+        {
+            internal LaunchMode Mode;
+            internal int StarIndex;
+        }
+
         private static void Prefix(
             SiloComponent __instance,
             ref DysonSphere sphere,
-            out bool __state)
+            out SiloState __state)
         {
-            __state = _batteryRocketLaunch;
-            _batteryRocketLaunch = __instance.bulletId == BatterySphereContent.ItemId
-                && BatterySphereContent.IsUnlocked;
-            if (!_batteryRocketLaunch)
+            __state = new SiloState { Mode = _mode, StarIndex = _launchStarIndex };
+            _mode = LaunchMode.Vanilla;
+            if (__instance.bulletId != BatterySphereContent.ItemId)
             {
                 return;
             }
 
-            _launchStarIndex = __instance.planetId / 100;
-            if (sphere == null && GameMain.data != null && GameMain.galaxy != null
+            // planetId is starId * 100 + planet number, and starId is the star index + 1.
+            _launchStarIndex = __instance.planetId / 100 - 1;
+            bool validStar = GameMain.galaxy != null
                 && _launchStarIndex >= 0
-                && _launchStarIndex < GameMain.galaxy.starCount)
+                && _launchStarIndex < GameMain.galaxy.starCount;
+            if (!validStar
+                || !BatterySphereContent.IsUnlocked
+                || !BatterySphereManager.IsPlanned(_launchStarIndex))
+            {
+                // Battery Rockets wait in the silo until a Battery Sphere is planned at this star.
+                _mode = LaunchMode.Block;
+                return;
+            }
+
+            _mode = LaunchMode.Capture;
+            if (sphere == null && GameMain.data != null)
             {
                 sphere = GameMain.data.CreateDysonSphere(_launchStarIndex);
             }
         }
 
-        private static Exception Finalizer(Exception __exception, bool __state)
+        private static Exception Finalizer(Exception __exception, SiloState __state)
         {
-            _batteryRocketLaunch = __state;
-            if (!__state)
-            {
-                _launchStarIndex = 0;
-            }
-
+            _mode = __state.Mode;
+            _launchStarIndex = __state.StarIndex;
             return __exception;
         }
 
         internal static bool IsCapturingRocket
         {
-            get { return _batteryRocketLaunch; }
+            get { return _mode == LaunchMode.Capture; }
+        }
+
+        internal static bool IsBlockingRocket
+        {
+            get { return _mode == LaunchMode.Block; }
         }
 
         internal static int LaunchStarIndex
@@ -463,7 +512,11 @@ namespace SubspaceTransport
     {
         private static void Postfix(ref int __result)
         {
-            if (BatterySphereSiloLaunchPatch.IsCapturingRocket && __result == 0)
+            if (BatterySphereSiloLaunchPatch.IsBlockingRocket)
+            {
+                __result = 0;
+            }
+            else if (BatterySphereSiloLaunchPatch.IsCapturingRocket && __result == 0)
             {
                 __result = 1;
             }
@@ -497,95 +550,6 @@ namespace SubspaceTransport
             TrafficStatistics tstat)
         {
             BatterySphereManager.ProcessStationPool(gStationPool, tstat, shipWarpSpeed);
-        }
-    }
-
-    [HarmonyPatch(typeof(UIDysonEditor), "_OnUpdate")]
-    internal static class BatterySphereProjectUIPatch
-    {
-        private const string StatusObjectName = "wormhole-battery-sphere-status";
-        private static UIDysonEditor _editor;
-        private static Text _status;
-        private static string _lastText;
-
-        private static void Postfix(UIDysonEditor __instance)
-        {
-            EnsureStatus(__instance);
-            if (_status == null)
-            {
-                return;
-            }
-
-            StarData star = __instance.selection != null ? __instance.selection.viewStar : null;
-            _status.gameObject.SetActive(star != null);
-            if (star == null)
-            {
-                return;
-            }
-
-            string text;
-            if (!BatterySphereContent.IsUnlocked)
-            {
-                text = "Battery Sphere\nResearch Battery Sphere Engineering to unlock.";
-            }
-            else
-            {
-                int rockets;
-                long power;
-                int empty;
-                int charged;
-                BatterySphereManager.GetProjectStatus(star.index, out rockets, out power, out empty, out charged);
-                text = string.Format(
-                    "Battery Sphere Project\nRockets: {0:N0}\nDedicated output: {1:N0} MW\nAccumulator buffer: {2:N0} empty / {3:N0} charged",
-                    rockets,
-                    power / 1000000L,
-                    empty,
-                    charged);
-            }
-
-            if (_lastText != text)
-            {
-                _status.text = text;
-                _lastText = text;
-            }
-        }
-
-        private static void EnsureStatus(UIDysonEditor editor)
-        {
-            if (_status != null && _editor == editor)
-            {
-                return;
-            }
-
-            Transform existing = editor.transform.Find(StatusObjectName);
-            GameObject statusObject;
-            if (existing != null)
-            {
-                statusObject = existing.gameObject;
-            }
-            else
-            {
-                statusObject = new GameObject(StatusObjectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-                statusObject.transform.SetParent(editor.transform, false);
-            }
-
-            RectTransform rect = statusObject.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(1f, 1f);
-            rect.anchorMax = new Vector2(1f, 1f);
-            rect.pivot = new Vector2(1f, 1f);
-            rect.anchoredPosition = new Vector2(-24f, -24f);
-            rect.sizeDelta = new Vector2(370f, 112f);
-
-            _status = statusObject.GetComponent<Text>();
-            _status.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            _status.fontSize = 15;
-            _status.color = Color.white;
-            _status.alignment = TextAnchor.UpperLeft;
-            _status.horizontalOverflow = HorizontalWrapMode.Wrap;
-            _status.verticalOverflow = VerticalWrapMode.Overflow;
-            _status.raycastTarget = false;
-            _editor = editor;
-            _lastText = null;
         }
     }
 }

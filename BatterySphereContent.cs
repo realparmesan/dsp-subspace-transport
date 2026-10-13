@@ -9,14 +9,29 @@ namespace SubspaceTransport
 {
     internal static class BatterySphereContent
     {
-        internal const int TechnologyId = 1920;
+        internal const int TechnologyId = 1951;
         internal const int ItemId = 11997;
         internal const int RecipeId = 11997;
 
         private const int SmallCarrierRocketItemId = 1503;
         private const int EnergyExchangerItemId = 2208;
 
+        private const string NameKey = "SubspaceTransport_BatteryRocket";
+        private const string DescriptionKey = "SubspaceTransport_BatteryRocketDescription";
+        private const string RecipeNameKey = "SubspaceTransport_BatteryRocketRecipe";
+
         internal static ManualLogSource Logger;
+
+        // Must run from Awake; see SubspaceWarperContent.RegisterTranslations.
+        internal static void RegisterTranslations()
+        {
+            LocalizationModule.RegisterTranslation(NameKey, "Battery Rocket");
+            LocalizationModule.RegisterTranslation(
+                DescriptionKey,
+                "A project rocket that expands a Battery Sphere to charge accumulators. " +
+                "Plan a Battery Sphere at the star in the Dyson Sphere editor before launching.");
+            LocalizationModule.RegisterTranslation(RecipeNameKey, "Battery Rocket");
+        }
 
         internal static void Register()
         {
@@ -38,28 +53,19 @@ namespace SubspaceTransport
             if (vanillaResearch == null
                 || carrierRocket == null
                 || LDB.items.Select(EnergyExchangerItemId) == null
-                || LDB.items.Select(HyperdriveModuleContent.ItemId) == null)
+                || LDB.items.Select(SubspaceWarperContent.ItemId) == null)
             {
                 throw new InvalidOperationException(
-                    "Could not find the required research, rocket, Energy Exchanger, or Hyperdrive Module prototype.");
+                    "Could not find the required research, rocket, Energy Exchanger, or Subspace Warper prototype.");
             }
 
-            LocalizationModule.RegisterTranslation(
-                "SubspaceTransport_BatterySphereRocket",
-                "Battery Sphere Rocket");
-            LocalizationModule.RegisterTranslation(
-                "SubspaceTransport_BatterySphereRocketDescription",
-                "A project rocket that expands a dedicated virtual Dyson Sphere to charge accumulators.");
-            LocalizationModule.RegisterTranslation(
-                "SubspaceTransport_BatterySphereRocketRecipe",
-                "Battery Sphere Rocket");
-
+            int gridIndex = Plugin.GetTabGridIndex(1, 1);
             ItemProto batteryRocket = ProtoRegistry.RegisterItem(
                 ItemId,
-                "SubspaceTransport_BatterySphereRocket",
-                "SubspaceTransport_BatterySphereRocketDescription",
-                carrierRocket.IconPath,
-                2810,
+                NameKey,
+                DescriptionKey,
+                IconLoader.BatteryRocket,
+                gridIndex,
                 20,
                 carrierRocket.Type,
                 ProtoRegistry.GetDefaultIconDesc(Color.cyan, Color.magenta));
@@ -80,16 +86,16 @@ namespace SubspaceTransport
                 {
                     SmallCarrierRocketItemId,
                     EnergyExchangerItemId,
-                    HyperdriveModuleContent.ItemId
+                    SubspaceWarperContent.ItemId
                 },
                 new[] { 1, 4, 2 },
                 new[] { ItemId },
                 new[] { 1 },
-                "SubspaceTransport_BatterySphereRocketDescription",
+                DescriptionKey,
                 TechnologyId,
-                2810,
-                "SubspaceTransport_BatterySphereRocketRecipe",
-                carrierRocket.IconPath);
+                gridIndex,
+                RecipeNameKey,
+                IconLoader.BatteryRocket);
 
             TechProto technology = new TechProto
             {
@@ -97,9 +103,10 @@ namespace SubspaceTransport
                 Name = "Battery Sphere Engineering",
                 Desc = "Construct a dedicated sphere project that charges accumulators for wormhole logistics.",
                 Conclusion =
-                    "Battery Sphere Rockets build a separate sphere project. Its dedicated output charges empty " +
-                    "accumulators, which enabled interstellar logistics stations can exchange for charged ones.",
-                IconPath = vanillaResearch.IconPath,
+                    "Plan a Battery Sphere at a star in the Dyson Sphere editor, then launch Battery Rockets there. " +
+                    "Its dedicated output charges empty accumulators, which enabled interstellar logistics stations " +
+                    "can exchange for charged ones.",
+                IconPath = IconLoader.BatterySphereEngineeringTech,
                 IconTag = vanillaResearch.IconTag,
                 IsHiddenTech = false,
                 PreItem = Array.Empty<int>(),
@@ -126,7 +133,7 @@ namespace SubspaceTransport
             };
 
             LDBTool.PreAddProto(technology);
-            Logger.LogInfo("Registered the Battery Sphere rocket, recipe, and technology.");
+            Logger.LogInfo("Registered the Battery Rocket, recipe, and technology.");
         }
 
         internal static void LinkTechnologyTree()
