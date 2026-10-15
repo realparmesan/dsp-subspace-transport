@@ -25,7 +25,7 @@ namespace SubspaceTransport
             LocalizationModule.RegisterTranslation(NameKey, "Subspace Warper");
             LocalizationModule.RegisterTranslation(
                 DescriptionKey,
-                "A stabilized spacetime-curvature warper consumed by wormhole logistics. " +
+                "A stabilized spacetime-curvature warper consumed by subspace logistics. " +
                 "Interstellar Logistics Stations keep them in a dedicated slot.");
             LocalizationModule.RegisterTranslation(RecipeNameKey, "Subspace Warper");
         }

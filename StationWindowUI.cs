@@ -10,7 +10,6 @@ namespace SubspaceTransport
         private static void Postfix()
         {
             StationWindowUI.Initialize();
-            BatterySphereSiloUI.Initialize();
         }
     }
 
@@ -34,7 +33,7 @@ namespace SubspaceTransport
     }
 
     // Adds, for Interstellar Logistics Stations only:
-    // - a "Wormhole Transport" checkbox row in the Station Settings tab;
+    // - a "Subspace Transport" checkbox row in the Station Settings tab;
     // - a Subspace Warper slot on a new row beneath the drone, vessel and Space Warper slots.
     internal static class StationWindowUI
     {
@@ -71,7 +70,7 @@ namespace SubspaceTransport
             {
                 if (!_initializationWarningLogged)
                 {
-                    Plugin.ModLogger.LogWarning("Could not initialize the Wormhole Logistics station window controls yet.");
+                    Plugin.ModLogger.LogWarning("Could not initialize the Subspace Logistics station window controls yet.");
                     _initializationWarningLogged = true;
                 }
 
@@ -202,11 +201,11 @@ namespace SubspaceTransport
                 Object.DestroyImmediate(localizer);
             }
 
-            label.text = "Wormhole Transport";
+            label.text = "Subspace Transport";
             label.horizontalOverflow = HorizontalWrapMode.Overflow;
             ((RectTransform)labelTransform).sizeDelta = new Vector2(200f, 20f);
 
-            _rowButton.tips.tipTitle = "Wormhole Transport";
+            _rowButton.tips.tipTitle = "Subspace Transport";
             _rowButton.tips.tipText =
                 "Transfer cargo instantly with other enabled Interstellar Logistics Stations. " +
                 "Each transfer uses one Subspace Warper from the sending station, or from the receiving station " +

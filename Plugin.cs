@@ -42,7 +42,7 @@ namespace SubspaceTransport
             BatterySphereContent.Logger = Logger;
             TabPage = TabSystem.RegisterTab(
                 TabId,
-                new TabData("Wormhole Logistics", IconLoader.WormholeLogisticsTech));
+                new TabData("Subspace", IconLoader.WormholeLogisticsTech));
             SubspaceLogisticsTechnology.RegisterTranslations();
             WormholeEfficiencyTechnology.RegisterTranslations();
             SubspaceWarperContent.RegisterTranslations();

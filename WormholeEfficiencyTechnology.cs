@@ -24,13 +24,13 @@ namespace SubspaceTransport
         // Must run from Awake; see SubspaceWarperContent.RegisterTranslations.
         internal static void RegisterTranslations()
         {
-            LocalizationModule.RegisterTranslation(NameKey, "Wormhole Efficiency");
+            LocalizationModule.RegisterTranslation(NameKey, "Subspace Efficiency");
             LocalizationModule.RegisterTranslation(
                 DescriptionKey,
                 "Stabilize wormhole apertures to reduce the energy that stations spend on each transfer.");
             LocalizationModule.RegisterTranslation(
                 ConclusionKey,
-                "Each level halves the station energy used by Wormhole Transport. " +
+                "Each level halves the station energy used by Subspace Transport. " +
                 "At level 3 it matches the normal logistics vessel trip cost.");
         }
 
@@ -51,7 +51,7 @@ namespace SubspaceTransport
                     "Could not find the Interstellar Logistics System technology (1605).");
             }
 
-            // Same per-level cost curve as Dyson Sphere Stress System; level 1 costs the same as Wormhole Logistics.
+            // Same per-level cost curve as Dyson Sphere Stress System; level 1 costs the same as Subspace Logistics.
             TechProto costReference = SubspaceLogisticsTechnology.GetCostReference();
 
             TechProto technology = new TechProto
@@ -88,7 +88,7 @@ namespace SubspaceTransport
 
             LDBTool.PreAddProto(technology);
             SubspaceLogisticsTechnology.RequireRegisteredId(technology, TechnologyId);
-            Logger.LogInfo("Registered the Wormhole Efficiency research technology.");
+            Logger.LogInfo("Registered the Subspace Efficiency research technology.");
         }
 
         internal static void LinkTechnologyTree()

@@ -15,7 +15,6 @@ namespace SubspaceTransport
         private const int MaximumTransferCount = 1000;
         private const int BatteryEnergyJoules = 270000000;
         private const long MaximumBufferedEnergy = (long)BatteryEnergyJoules * MaximumBatteryBuffer;
-        private const long PowerPerRocketWatts = 1000000;
         private const long TicksPerSecond = 60;
 
         private sealed class StarProject
@@ -34,30 +33,6 @@ namespace SubspaceTransport
         private static long _energyRemainder;
         private static long _powerTickRemainder;
         private static long _lastProcessedTick = -1;
-
-        internal static void RegisterRocket(int starIndex)
-        {
-            if (starIndex < 0)
-            {
-                Plugin.ModLogger.LogWarning("Ignored a Battery Rocket launched without a valid star.");
-                return;
-            }
-
-            lock (Sync)
-            {
-                StarProject project;
-                if (!Projects.TryGetValue(starIndex, out project))
-                {
-                    project = new StarProject();
-                    Projects.Add(starIndex, project);
-                }
-
-                if (project.RocketCount < MaximumProjectRockets)
-                {
-                    project.RocketCount++;
-                }
-            }
-        }
 
         internal static bool IsPlanned(int starIndex)
         {
@@ -110,7 +85,7 @@ namespace SubspaceTransport
                 rocketCount = Projects.TryGetValue(starIndex, out project)
                     ? project.RocketCount
                     : 0;
-                outputWatts = rocketCount * PowerPerRocketWatts;
+                outputWatts = GetSphereWatts(starIndex);
                 emptyCount = _emptyAccumulatorCount;
                 chargedCount = _chargedAccumulatorCount;
             }
@@ -242,9 +217,20 @@ namespace SubspaceTransport
             }
         }
 
+        // A Battery Sphere is an ordinary Dyson Sphere built by Battery Rockets; its generated power charges
+        // accumulators instead of reaching the grid.
+        private static long GetSphereWatts(int starIndex)
+        {
+            DysonSphere[] spheres = GameMain.data != null ? GameMain.data.dysonSpheres : null;
+            DysonSphere sphere = spheres != null && starIndex >= 0 && starIndex < spheres.Length
+                ? spheres[starIndex]
+                : null;
+            return sphere != null ? sphere.energyGenCurrentTick * TicksPerSecond : 0L;
+        }
+
         private static long GetTotalOutputWattsUnsafe()
         {
-            long rocketCount = 0;
+            long watts = 0;
             foreach (KeyValuePair<int, StarProject> entry in Projects)
             {
                 if (!entry.Value.Planned
@@ -253,10 +239,10 @@ namespace SubspaceTransport
                     continue;
                 }
 
-                rocketCount += entry.Value.RocketCount;
+                watts += GetSphereWatts(entry.Key);
             }
 
-            return rocketCount * PowerPerRocketWatts;
+            return watts;
         }
 
         private static void AdvancePowerUnsafe(long tick)
@@ -308,8 +294,13 @@ namespace SubspaceTransport
                         }
 
                         int supplyCount = Math.Min(store.count, store.remoteSupplyCount);
+                        if (supplyCount <= GetMinimumLoad(station, store.max))
+                        {
+                            continue;
+                        }
+
                         int transferCount = Math.Min(
-                            MaximumTransferCount,
+                            GetMaximumTransfer(),
                             Math.Min(supplyCount, MaximumBatteryBuffer - _emptyAccumulatorCount));
                         long energyCost = station.CalcTripEnergyCost(0.0, shipWarpSpeed, true);
                         if (transferCount <= 0
@@ -377,9 +368,13 @@ namespace SubspaceTransport
                             continue;
                         }
 
-                        int transferCount = Math.Min(
-                            MaximumTransferCount,
-                            Math.Min(store.remoteDemandCount, _chargedAccumulatorCount));
+                        int demandCount = Math.Min(store.remoteDemandCount, _chargedAccumulatorCount);
+                        if (demandCount <= GetMinimumLoad(station, store.max))
+                        {
+                            continue;
+                        }
+
+                        int transferCount = Math.Min(GetMaximumTransfer(), demandCount);
                         long energyCost = station.CalcTripEnergyCost(0.0, shipWarpSpeed, true);
                         if (transferCount <= 0
                             || station.energy < energyCost
@@ -399,6 +394,21 @@ namespace SubspaceTransport
                     }
                 }
             }
+        }
+
+        // The station's minimum vessel load setting, as vessel dispatch applies it: a transfer must carry more
+        // than this many items, but never more than the slot can hold.
+        private static int GetMinimumLoad(StationComponent station, int slotMax)
+        {
+            int carries = GameMain.history != null ? GameMain.history.logisticShipCarries : 1;
+            int threshold = (carries - 1) * station.deliveryShips / 100;
+            return Math.Max(0, Math.Min(threshold, slotMax - 1));
+        }
+
+        private static int GetMaximumTransfer()
+        {
+            int carries = GameMain.history != null ? GameMain.history.logisticShipCarries : 0;
+            return Math.Max(MaximumTransferCount, carries);
         }
 
         private static bool CanUseStation(StationComponent station)
@@ -477,6 +487,7 @@ namespace SubspaceTransport
                 return;
             }
 
+            // A planned star builds with Battery Rockets exactly like a Dyson Sphere does with Carrier Rockets.
             _mode = LaunchMode.Capture;
             if (sphere == null && GameMain.data != null)
             {
@@ -491,19 +502,10 @@ namespace SubspaceTransport
             return __exception;
         }
 
-        internal static bool IsCapturingRocket
-        {
-            get { return _mode == LaunchMode.Capture; }
-        }
 
         internal static bool IsBlockingRocket
         {
             get { return _mode == LaunchMode.Block; }
-        }
-
-        internal static int LaunchStarIndex
-        {
-            get { return _launchStarIndex; }
         }
     }
 
@@ -516,28 +518,6 @@ namespace SubspaceTransport
             {
                 __result = 0;
             }
-            else if (BatterySphereSiloLaunchPatch.IsCapturingRocket && __result == 0)
-            {
-                __result = 1;
-            }
-        }
-    }
-
-    [HarmonyPatch(typeof(DysonSphere), "AddDysonRocket")]
-    internal static class BatterySphereRocketCapturePatch
-    {
-        private static bool Prefix(DysonSphere __instance)
-        {
-            if (!BatterySphereSiloLaunchPatch.IsCapturingRocket)
-            {
-                return true;
-            }
-
-            int starIndex = __instance.starData != null
-                ? __instance.starData.index
-                : BatterySphereSiloLaunchPatch.LaunchStarIndex;
-            BatterySphereManager.RegisterRocket(starIndex);
-            return false;
         }
     }
 

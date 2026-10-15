@@ -28,17 +28,17 @@ namespace SubspaceTransport
         // Must run from Awake; see SubspaceWarperContent.RegisterTranslations.
         internal static void RegisterTranslations()
         {
-            LocalizationModule.RegisterTranslation(NameKey, "Wormhole Logistics");
+            LocalizationModule.RegisterTranslation(NameKey, "Subspace Logistics");
             LocalizationModule.RegisterTranslation(
                 DescriptionKey,
                 "Instantly transfer cargo between interstellar logistics stations.");
             LocalizationModule.RegisterTranslation(
                 ConclusionKey,
                 "Interstellar logistics stations can transfer cargo through wormholes without logistics vessels. " +
-                "Enable Wormhole Transport in each station's settings. Each transfer consumes one Subspace Warper " +
+                "Enable Subspace Transport in each station's settings. Each transfer consumes one Subspace Warper " +
                 "from the sending station, or from the receiving station if the sender has none, " +
                 "and still requires station power. " +
-                "Research Wormhole Efficiency to reduce the energy cost.");
+                "Research Subspace Efficiency to reduce the energy cost.");
         }
 
         internal static void Register()
@@ -99,7 +99,7 @@ namespace SubspaceTransport
 
             LDBTool.PreAddProto(technology);
             RequireRegisteredId(technology, TechnologyId);
-            Logger.LogInfo("Registered the Wormhole Logistics research technology.");
+            Logger.LogInfo("Registered the Subspace Logistics research technology.");
         }
 
         internal static TechProto GetCostReference()

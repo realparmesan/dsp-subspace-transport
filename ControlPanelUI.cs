@@ -51,7 +51,7 @@ namespace SubspaceTransport
     {
         private static void Postfix(UIControlPanelStationInspector __instance)
         {
-            ControlPanelUI.RefreshInspector(__instance);
+            ControlPanelUI.OnInspectorStationChanged(__instance);
         }
     }
 
@@ -65,9 +65,9 @@ namespace SubspaceTransport
     }
 
     // Adds to the Control Panel, for Interstellar Logistics Stations only:
-    // - a Subspace Warper row beneath the drone, vessel and Space Warper rows of each station list entry;
-    // - the same row beneath the delivery icons in the station inspector's info tab;
-    // - the Wormhole Transport checkbox under the outgoing integration count row of the settings tab.
+    // - a Subspace Warper icon after the drone, vessel and Space Warper icons of each station list entry;
+    // - the same icon after the delivery icons in the station inspector's info tab;
+    // - the Subspace Transport checkbox under the outgoing integration count row of the settings tab.
     // The checkbox reads and writes the same StationSettings value as the station window's row.
     internal static class ControlPanelUI
     {
@@ -77,7 +77,11 @@ namespace SubspaceTransport
 
         // Matches the vanilla settings rows, which are 20 px apart.
         private const float SettingsRowHeight = 20f;
-        private const float RowSpacing = 4f;
+
+        // Space between the new icon and the power readout to its right. The inspector value matches vanilla's
+        // gap between the Space Warper icon and the power state.
+        private const float EntryPowerGap = 8f;
+        private const float InspectorPowerGap = 20f;
 
         private sealed class DeliveryRow
         {
@@ -98,13 +102,15 @@ namespace SubspaceTransport
         private static UIControlPanelStationInspector _inspector;
         private static DeliveryRow _inspectorRow;
         private static RectTransform _settingRow;
+        // The power state width vanilla set for the current station, before this row narrowed it.
+        private static float _vanillaPowerWidth = -1f;
         private static Image _settingCheck;
 
         internal static void AddEntryRow(UIControlPanelStationEntry template)
         {
             if (template.warperGroupGo == null
                 || template.shipGroupGo == null
-                || template.droneGroupGo == null
+                || template.powerGroupGo == null
                 || template.warperIconImage == null
                 || template.warperCountText == null
                 || template.warperIconButton == null)
@@ -131,15 +137,21 @@ namespace SubspaceTransport
 
             GameObject row = Object.Instantiate(template.warperGroupGo, group.parent, false);
             row.name = EntryRowName;
-            PlaceAfter(
-                (RectTransform)row.transform,
-                (RectTransform)template.droneGroupGo.transform,
-                (RectTransform)template.shipGroupGo.transform,
-                (RectTransform)group);
-            GrowToFit(
-                template.rectTransform,
-                (RectTransform)row.transform,
-                (RectTransform)template.droneGroupGo.transform);
+            RectTransform rowRect = (RectTransform)row.transform;
+            PlaceBeside(rowRect, (RectTransform)template.shipGroupGo.transform, (RectTransform)group);
+
+            // The entry is a fixed 50 px tall, so the icon goes in the row and the power group moves right to
+            // make room. The delivery group and the power group both measure from the entry's left edge.
+            RectTransform icons = (RectTransform)group.parent;
+            float rowRight = rowRect.anchoredPosition.x + rowRect.sizeDelta.x;
+            icons.sizeDelta = new Vector2(Mathf.Max(icons.sizeDelta.x, rowRight), icons.sizeDelta.y);
+
+            RectTransform power = (RectTransform)template.powerGroupGo.transform;
+            float shift = icons.anchoredPosition.x + rowRight + EntryPowerGap - power.anchoredPosition.x;
+            if (shift > 0f)
+            {
+                power.anchoredPosition += new Vector2(Mathf.Ceil(shift), 0f);
+            }
         }
 
         internal static void UpdateEntry(UIControlPanelStationEntry entry)
@@ -174,7 +186,10 @@ namespace SubspaceTransport
 
             if (inspector.warperGo != null
                 && inspector.shipGo != null
-                && inspector.droneGo != null
+                && inspector.deliveryGroupRectTransform != null
+                && inspector.powerGroupRect != null
+                && inspector.energyBar != null
+                && inspector.energyText != null
                 && inspector.warperIconImage != null
                 && inspector.warperCountText != null
                 && inspector.warperIconButton != null)
@@ -199,6 +214,17 @@ namespace SubspaceTransport
             }
         }
 
+        // Vanilla sets the power state width when the station changes, so it is recorded before this row narrows it.
+        internal static void OnInspectorStationChanged(UIControlPanelStationInspector inspector)
+        {
+            if (inspector == _inspector && inspector.powerGroupRect != null)
+            {
+                _vanillaPowerWidth = inspector.powerGroupRect.sizeDelta.x;
+            }
+
+            RefreshInspector(inspector);
+        }
+
         internal static void RefreshInspector(UIControlPanelStationInspector inspector)
         {
             if (inspector != _inspector)
@@ -220,7 +246,12 @@ namespace SubspaceTransport
 
                 if (show)
                 {
+                    PlaceInspectorRow(inspector);
                     UpdateDeliveryRow(_inspectorRow, station);
+                }
+                else
+                {
+                    RestoreInspectorPower(inspector);
                 }
             }
 
@@ -266,11 +297,6 @@ namespace SubspaceTransport
 
             GameObject clone = Object.Instantiate(inspector.warperGo, group.parent, false);
             clone.name = InspectorRowName;
-            PlaceAfter(
-                (RectTransform)clone.transform,
-                (RectTransform)inspector.droneGo.transform,
-                (RectTransform)inspector.shipGo.transform,
-                (RectTransform)group);
 
             DeliveryRow row = BindDeliveryRow(clone, iconPath, countPath, buttonPath);
             if (row == null)
@@ -300,7 +326,7 @@ namespace SubspaceTransport
             {
                 Plugin.ModLogger.LogWarning(
                     "The Control Panel's Warpers Required checkbox is not inside its row, " +
-                    "so no Wormhole Transport row was added.");
+                    "so no Subspace Transport row was added.");
                 return;
             }
 
@@ -331,10 +357,10 @@ namespace SubspaceTransport
                 }
             }
 
-            labels[0].text = "Wormhole Transport";
+            labels[0].text = "Subspace Transport";
             labels[0].horizontalOverflow = HorizontalWrapMode.Overflow;
 
-            button.tips.tipTitle = "Wormhole Transport";
+            button.tips.tipTitle = "Subspace Transport";
             button.tips.tipText =
                 "Transfer cargo instantly with other enabled Interstellar Logistics Stations. " +
                 "Each transfer uses one Subspace Warper from the sending station, or from the receiving station " +
@@ -426,9 +452,8 @@ namespace SubspaceTransport
             }
         }
 
-        // Places row as the next item after drone, ship and warper. Vertically stacked rows continue the stack;
-        // side-by-side icons get a new row beneath the first one.
-        private static void PlaceAfter(RectTransform row, RectTransform drone, RectTransform ship, RectTransform warper)
+        // Places row one icon step past the Space Warper icon, continuing the ship-to-warper spacing.
+        private static void PlaceBeside(RectTransform row, RectTransform ship, RectTransform warper)
         {
             LayoutElement layout = row.GetComponent<LayoutElement>();
             if (layout == null)
@@ -437,29 +462,59 @@ namespace SubspaceTransport
             }
 
             layout.ignoreLayout = true;
+            row.anchoredPosition = warper.anchoredPosition + (warper.anchoredPosition - ship.anchoredPosition);
+        }
 
-            Vector2 step = warper.anchoredPosition - ship.anchoredPosition;
-            if (Mathf.Abs(step.y) >= 1f && Mathf.Abs(step.y) >= Mathf.Abs(step.x))
+        // The inspector's delivery icons sit at the bottom of a fixed-height view, so there is no room for a second
+        // row. The icon goes in the row instead and the power state narrows, as vanilla does for the Space Warper.
+        private static void PlaceInspectorRow(UIControlPanelStationInspector inspector)
+        {
+            RectTransform row = (RectTransform)_inspectorRow.Root.transform;
+            RectTransform warper = (RectTransform)inspector.warperGo.transform;
+            PlaceBeside(row, (RectTransform)inspector.shipGo.transform, warper);
+
+            // Before warp drive research vanilla hides the Space Warper icon, so this one takes its slot.
+            if (!inspector.warperIconButton.gameObject.activeSelf)
             {
-                row.anchoredPosition = warper.anchoredPosition + new Vector2(0f, step.y);
+                row.anchoredPosition = warper.anchoredPosition;
             }
-            else
+
+            if (_vanillaPowerWidth <= 0f)
             {
-                float height = Mathf.Max(drone.rect.height, warper.rect.height);
-                row.anchoredPosition = new Vector2(
-                    drone.anchoredPosition.x,
-                    drone.anchoredPosition.y - height - RowSpacing);
+                return;
+            }
+
+            RectTransform power = inspector.powerGroupRect;
+            float free = inspector.deliveryGroupRectTransform.rect.width
+                - (row.anchoredPosition.x + row.rect.width + InspectorPowerGap);
+            float width = Mathf.Min(_vanillaPowerWidth, Mathf.Floor(free));
+            if (power.sizeDelta.x != width)
+            {
+                power.sizeDelta = new Vector2(width, power.sizeDelta.y);
+            }
+
+            if (width < _vanillaPowerWidth)
+            {
+                PlaceEnergyText(inspector);
             }
         }
 
-        // Extends the entry downward by the distance the new row sits below the drone row. The template's world
-        // corners aren't laid out yet when this runs, so this uses the rows' own positions and heights.
-        private static void GrowToFit(RectTransform entry, RectTransform row, RectTransform drone)
+        // Vanilla positions the energy text for its own bar widths each update, so it is redone for the narrower bar.
+        private static void PlaceEnergyText(UIControlPanelStationInspector inspector)
         {
-            float extra = drone.anchoredPosition.y - row.anchoredPosition.y;
-            if (extra > 0f)
+            RectTransform bar = (RectTransform)inspector.energyBar.transform.parent;
+            float fill = inspector.energyBar.fillAmount;
+            float offset = fill > 0.7f ? -30f : 30f;
+            inspector.energyText.rectTransform.anchoredPosition =
+                new Vector2(Mathf.Round(bar.rect.width * fill + offset), 0f);
+        }
+
+        private static void RestoreInspectorPower(UIControlPanelStationInspector inspector)
+        {
+            RectTransform power = inspector.powerGroupRect;
+            if (_vanillaPowerWidth > 0f && power != null && power.sizeDelta.x != _vanillaPowerWidth)
             {
-                entry.sizeDelta = new Vector2(entry.sizeDelta.x, entry.sizeDelta.y + Mathf.Ceil(extra));
+                power.sizeDelta = new Vector2(_vanillaPowerWidth, power.sizeDelta.y);
             }
         }
 

@@ -16,7 +16,7 @@ namespace SubspaceTransport
         // Research cost is copied from Artificial Star.
         private const int CostReferenceTechnologyId = 1144;
         private const int SmallCarrierRocketItemId = 1503;
-        private const int EnergyExchangerItemId = 2208;
+        private const int EnergyExchangerItemId = 2209;
 
         private const string NameKey = "SubspaceTransport_BatteryRocket";
         private const string DescriptionKey = "SubspaceTransport_BatteryRocketDescription";
@@ -34,7 +34,7 @@ namespace SubspaceTransport
             LocalizationModule.RegisterTranslation(TechNameKey, "Battery Sphere Engineering");
             LocalizationModule.RegisterTranslation(
                 TechDescriptionKey,
-                "Construct a dedicated sphere project that charges accumulators for wormhole logistics.");
+                "Construct a dedicated sphere project that charges accumulators for subspace logistics.");
             LocalizationModule.RegisterTranslation(
                 TechConclusionKey,
                 "Plan a Battery Sphere at a star in the Dyson Sphere editor, then launch Battery Rockets there. " +
@@ -70,11 +70,10 @@ namespace SubspaceTransport
                 || costReference?.Items == null
                 || costReference.ItemPoints == null
                 || carrierRocket == null
-                || LDB.items.Select(EnergyExchangerItemId) == null
-                || LDB.items.Select(SubspaceWarperContent.ItemId) == null)
+                || LDB.items.Select(EnergyExchangerItemId) == null)
             {
                 throw new InvalidOperationException(
-                    "Could not find the required research, Artificial Star, rocket, Energy Exchanger, or Subspace Warper prototype.");
+                    "Could not find the required research, Artificial Star, rocket, or Energy Exchanger prototype.");
             }
 
             int gridIndex = Plugin.GetTabGridIndex(1, 1);
@@ -103,10 +102,9 @@ namespace SubspaceTransport
                 new[]
                 {
                     SmallCarrierRocketItemId,
-                    EnergyExchangerItemId,
-                    SubspaceWarperContent.ItemId
+                    EnergyExchangerItemId
                 },
-                new[] { 1, 4, 2 },
+                new[] { 1, 1 },
                 new[] { ItemId },
                 new[] { 1 },
                 DescriptionKey,

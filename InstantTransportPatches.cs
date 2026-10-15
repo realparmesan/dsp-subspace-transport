@@ -300,7 +300,7 @@ namespace SubspaceTransport
             return true;
         }
 
-        // Both endpoints must have Wormhole Transport enabled, and at least one must hold a Subspace Warper.
+        // Both endpoints must have Subspace Transport enabled, and at least one must hold a Subspace Warper.
         internal static bool CanTransfer(StationComponent source, StationComponent destination, int itemId)
         {
             if (!SubspaceLogisticsTechnology.IsUnlocked
@@ -327,7 +327,7 @@ namespace SubspaceTransport
                     enabled,
                     "partner-disabled:" + disabled.gid,
                     "is paired with station " + TransportDiagnostics.Describe(disabled) +
-                    ", which does not have Wormhole Transport enabled, so they use logistics vessels.");
+                    ", which does not have Subspace Transport enabled, so they use logistics vessels.");
                 return false;
             }
 
@@ -414,7 +414,7 @@ namespace SubspaceTransport
                 }
             }
 
-            Plugin.ModLogger?.LogInfo("Wormhole Transport: station " + Describe(station) + " " + message);
+            Plugin.ModLogger?.LogInfo("Subspace Transport: station " + Describe(station) + " " + message);
         }
 
         // Matches the Control Panel: planet name and the station's "#" number.

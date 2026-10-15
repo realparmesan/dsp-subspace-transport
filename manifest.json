@@ -2,7 +2,7 @@
   "name": "SubspaceTransport",
   "version_number": "0.6.0",
   "website_url": "https://github.com/realparmesan/dsp-subspace-transport",
-  "description": "Wormhole Logistics with a dedicated accumulator-charging Battery Sphere project.",
+  "description": "Subspace Logistics with a dedicated accumulator-charging Battery Sphere project.",
   "dependencies": [
     "xiaoye97-BepInEx-5.4.17",
     "xiaoye97-LDBTool-3.0.3",
