@@ -117,8 +117,7 @@ intended.
 
 ## Decisions (2026-10-15)
 
-- Activation threshold is **1 MW** for now (`HyperMassManager.ActivationWatts`),
-  to be raised to 10 GW after testing. It is measured as the
+- Activation threshold is **10 GW** (`HyperMassManager.ActivationWatts`). It is measured as the
   sphere's generated power, the same statistic the Battery Sphere status shows.
 - Amplification has **50 levels of +0.02 L** each (`HyperMassContent.LuminosityPerLevel`
   and `AmplificationMaximumLevel`), so 50 upgrades take a star from 2.5 L to

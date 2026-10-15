@@ -13,8 +13,7 @@ namespace SubspaceTransport
     // the conversion is stored here and reapplied after loading.
     internal static class HyperMassManager
     {
-        // 1 MW while testing; the intended value is 10 GW.
-        internal const long ActivationWatts = 1000000L;
+        internal const long ActivationWatts = 10000000000L;
 
         private const int SaveFormatVersion = 1;
         private const int MaximumSavedStars = 10000;
