@@ -40,6 +40,7 @@ namespace SubspaceTransport
             SubspaceLogisticsTechnology.Logger = Logger;
             WormholeEfficiencyTechnology.Logger = Logger;
             BatterySphereContent.Logger = Logger;
+            HyperMassContent.Logger = Logger;
             TabPage = TabSystem.RegisterTab(
                 TabId,
                 new TabData("Subspace", IconLoader.WormholeLogisticsTech));
@@ -47,13 +48,16 @@ namespace SubspaceTransport
             WormholeEfficiencyTechnology.RegisterTranslations();
             SubspaceWarperContent.RegisterTranslations();
             BatterySphereContent.RegisterTranslations();
+            HyperMassContent.RegisterTranslations();
             LDBTool.PreAddDataAction += SubspaceLogisticsTechnology.Register;
             LDBTool.PreAddDataAction += WormholeEfficiencyTechnology.Register;
             LDBTool.PreAddDataAction += SubspaceWarperContent.Register;
             LDBTool.PreAddDataAction += BatterySphereContent.Register;
+            LDBTool.PreAddDataAction += HyperMassContent.Register;
             LDBTool.PostAddDataAction += SubspaceLogisticsTechnology.LinkTechnologyTree;
             LDBTool.PostAddDataAction += WormholeEfficiencyTechnology.LinkTechnologyTree;
             LDBTool.PostAddDataAction += BatterySphereContent.LinkTechnologyTree;
+            LDBTool.PostAddDataAction += HyperMassContent.LinkTechnologyTree;
 
             _harmony = new Harmony(PluginGuid);
             _harmony.PatchAll();
@@ -67,9 +71,11 @@ namespace SubspaceTransport
             LDBTool.PreAddDataAction -= WormholeEfficiencyTechnology.Register;
             LDBTool.PreAddDataAction -= SubspaceWarperContent.Register;
             LDBTool.PreAddDataAction -= BatterySphereContent.Register;
+            LDBTool.PreAddDataAction -= HyperMassContent.Register;
             LDBTool.PostAddDataAction -= SubspaceLogisticsTechnology.LinkTechnologyTree;
             LDBTool.PostAddDataAction -= WormholeEfficiencyTechnology.LinkTechnologyTree;
             LDBTool.PostAddDataAction -= BatterySphereContent.LinkTechnologyTree;
+            LDBTool.PostAddDataAction -= HyperMassContent.LinkTechnologyTree;
             _harmony?.UnpatchSelf();
             if (Log == this)
             {
@@ -87,13 +93,14 @@ namespace SubspaceTransport
         {
             StationSettings.Export(writer);
             BatterySphereManager.Export(writer);
+            HyperMassManager.Export(writer);
         }
 
         public void Import(BinaryReader reader)
         {
             TransportDiagnostics.Reset();
             StationSettings.Import(reader);
-            if (reader.BaseStream.CanSeek && reader.BaseStream.Position < reader.BaseStream.Length)
+            if (HasMoreData(reader))
             {
                 BatterySphereManager.Import(reader);
             }
@@ -101,6 +108,21 @@ namespace SubspaceTransport
             {
                 BatterySphereManager.Reset();
             }
+
+            // Saves from before the Hyper Mass Injector end after the Battery Sphere data.
+            if (HasMoreData(reader))
+            {
+                HyperMassManager.Import(reader);
+            }
+            else
+            {
+                HyperMassManager.Reset();
+            }
+        }
+
+        private static bool HasMoreData(BinaryReader reader)
+        {
+            return reader.BaseStream.CanSeek && reader.BaseStream.Position < reader.BaseStream.Length;
         }
 
         public void IntoOtherSave()
@@ -108,6 +130,7 @@ namespace SubspaceTransport
             TransportDiagnostics.Reset();
             StationSettings.Reset();
             BatterySphereManager.Reset();
+            HyperMassManager.Reset();
         }
     }
 }

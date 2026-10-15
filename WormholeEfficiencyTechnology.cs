@@ -10,14 +10,16 @@ namespace SubspaceTransport
     // trip cost before any level down to 1x at level 3.
     internal static class WormholeEfficiencyTechnology
     {
-        internal const int TechnologyId = 1952;
+        // Upgrades tab techs have IDs of 2000 and up. The tech used to be 1952 on the main tab, so its names changed
+        // too: LDBTool pins each name to an ID in its config.
+        internal const int TechnologyId = 2950;
         internal const int MaximumLevel = 3;
 
         private const int BaseEnergyMultiplier = 8;
 
-        private const string NameKey = "SubspaceTransport_WormholeEfficiencyTech";
-        private const string DescriptionKey = "SubspaceTransport_WormholeEfficiencyTechDescription";
-        private const string ConclusionKey = "SubspaceTransport_WormholeEfficiencyTechConclusion";
+        private const string NameKey = "SubspaceTransport_SubspaceEfficiencyUpgrade";
+        private const string DescriptionKey = "SubspaceTransport_SubspaceEfficiencyUpgradeDescription";
+        private const string ConclusionKey = "SubspaceTransport_SubspaceEfficiencyUpgradeConclusion";
 
         internal static ManualLogSource Logger;
 
@@ -64,7 +66,7 @@ namespace SubspaceTransport
                 IconTag = vanillaResearch.IconTag,
                 IsHiddenTech = false,
                 PreItem = Array.Empty<int>(),
-                Position = vanillaResearch.Position + new Vector2(8f, 4f),
+                Position = UpgradesTab.GetPosition(0),
                 PreTechs = new[] { SubspaceLogisticsTechnology.TechnologyId },
                 PreTechsImplicit = Array.Empty<int>(),
                 Items = (int[])costReference.Items.Clone(),

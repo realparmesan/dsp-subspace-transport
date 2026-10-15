@@ -6,8 +6,8 @@ using UnityEngine.UI;
 namespace SubspaceTransport
 {
     // Megastructure type selector in the Dyson Sphere editor (Y): a drop-down at the top centre of the editor,
-    // clear of the left-edge panel More Megastructures draws. The Stellar Hyper Mass sphere will be added as
-    // a third button after Battery Sphere.
+    // clear of the left-edge panel More Megastructures draws. Below the status is the Hyper Mass Injector's
+    // hyperinjection button, shown while that type is selected.
     [HarmonyPatch(typeof(UIDysonEditor), "_OnUpdate")]
     internal static class BatterySphereEditorUI
     {
@@ -17,15 +17,27 @@ namespace SubspaceTransport
         private const float ButtonHeight = 24f;
         private const float RowSpacing = 28f;
         private const float StatusHeight = 110f;
+        private const int TypeRows = 3;
+        private const float StatusTop = TypeRows * RowSpacing;
+        private const float InjectTop = StatusTop + StatusHeight + 4f;
         private const float BodyTop = 30f;
         private const float TopOffset = 50f;
+
+        private const int LabelFontSize = 14;
+        private const int StatusFontSize = 14;
+        private const float StatusPadding = 8f;
 
         private static readonly Color SelectedTextColor = new Color(1f, 0.82f, 0.25f, 1f);
         private static readonly Color ButtonPlateColor = new Color(0.05f, 0.09f, 0.13f, 0.94f);
         private static readonly Color StatusPlateColor = new Color(0.05f, 0.09f, 0.13f, 0.8f);
         private static readonly Color NormalTextColor = new Color(0.92f, 0.95f, 0.98f, 1f);
+        private static readonly Color UnavailableTextColor = new Color(0.55f, 0.58f, 0.62f, 1f);
+        private static readonly Color InjectTextColor = new Color(0.78f, 0.62f, 1f, 1f);
 
         private static UIDysonEditor _editor;
+
+        // The game's UI font, taken from the copied button; Arial until a button has been created.
+        private static Font _font;
         private static RectTransform _panel;
         private static RectTransform _body;
         private static Text _handleText;
@@ -34,6 +46,10 @@ namespace SubspaceTransport
         private static Text _dysonText;
         private static UIButton _batteryButton;
         private static Text _batteryText;
+        private static UIButton _hyperButton;
+        private static Text _hyperText;
+        private static UIButton _injectButton;
+        private static Text _injectText;
         private static Text _status;
         private static string _lastStatus;
 
@@ -53,11 +69,18 @@ namespace SubspaceTransport
             }
 
             bool planned = BatterySphereManager.IsPlanned(star.index);
-            SetButtonState(_dysonButton, _dysonText, "Dyson Sphere", !planned);
+            bool hyperPlanned = HyperMassManager.IsPlanned(star.index);
+            SetButtonState(_dysonButton, _dysonText, "Dyson Sphere", !planned && !hyperPlanned);
             SetButtonState(_batteryButton, _batteryText, "Battery Sphere", planned);
+            SetButtonState(_hyperButton, _hyperText, "Hyper Mass Injector", hyperPlanned);
+            UpdateInjectButton(star, hyperPlanned);
 
             string status;
-            if (!BatterySphereContent.IsUnlocked)
+            if (hyperPlanned)
+            {
+                status = GetHyperMassStatus(star);
+            }
+            else if (!BatterySphereContent.IsUnlocked)
             {
                 status = "Research Battery Sphere Engineering to plan a Battery Sphere.";
             }
@@ -87,23 +110,91 @@ namespace SubspaceTransport
             }
         }
 
-        private static void OnDysonClicked(int _)
+        private static string GetHyperMassStatus(StarData star)
         {
-            StarData star = GetViewStar();
-            if (star == null || !BatterySphereManager.IsPlanned(star.index))
+            long watts = HyperMassManager.GetSphereWatts(star.index);
+            float injected = HyperMassManager.GetInjectedLuminosity(star.index);
+            string result = string.Format(
+                "Hyper Mass Injector Project\nSphere output: {0} / {1}\n" +
+                "Star: {2:0.000} L, {3:0.00} R, {4:N0} K",
+                HyperMassManager.FormatPower(watts),
+                HyperMassManager.ActivationPower,
+                star.dysonLumino,
+                star.radius,
+                star.temperature);
+            float target = HyperMassContent.TargetLuminosity;
+            if (target > 0f)
+            {
+                result += string.Format("\nResearch target: {0:0.0#} L", target);
+            }
+
+            if (injected > 0f)
+            {
+                result += string.Format("\nHyperinjected: {0}", star.typeString);
+            }
+
+            return result;
+        }
+
+        private static void UpdateInjectButton(StarData star, bool hyperPlanned)
+        {
+            _injectButton.gameObject.SetActive(hyperPlanned);
+            if (!hyperPlanned)
             {
                 return;
             }
 
-            DysonSphere[] spheres = GameMain.data != null ? GameMain.data.dysonSpheres : null;
-            DysonSphere sphere = spheres != null && star.index < spheres.Length ? spheres[star.index] : null;
-            bool sandbox = GameMain.data.gameDesc != null && GameMain.data.gameDesc.isSandboxMode;
-            if (sphere != null && sphere.totalNodeCount > 0 && !sandbox)
+            bool available = HyperMassManager.GetInjectionBlocker(star) == null;
+            _injectText.color = available ? InjectTextColor : UnavailableTextColor;
+            _injectButton.highlighted = false;
+        }
+
+        private static void OnInjectClicked(int _)
+        {
+            StarData star = GetViewStar();
+            string blocker = HyperMassManager.GetInjectionBlocker(star);
+            if (blocker != null)
             {
-                UIRealtimeTip.Popup("Remove this star's Dyson Sphere structures before switching to a Dyson Sphere.");
+                UIRealtimeTip.Popup(blocker);
                 return;
             }
+
+            int starIndex = star.index;
+            UIMessageBox.Show(
+                "Hyperinject Mass into the Star",
+                "Inject matter from other galaxies into " + star.displayName + ", raising it to " +
+                HyperMassContent.TargetLuminosity.ToString("0.0#") + " L. The star grows into a hypergiant, " +
+                "and the system's solar power gets stronger. The Hyper Mass Injector sphere is consumed and destroyed, " +
+                "and the change cannot be undone.",
+                "取消".Translate(),
+                "确定".Translate(),
+                UIMessageBox.QUESTION,
+                null,
+                () =>
+                {
+                    StarData current = GetViewStar();
+                    if (current != null && current.index == starIndex)
+                    {
+                        HyperMassManager.Inject(current);
+
+                        // The editor still points at the destroyed sphere.
+                        _editor.selection.SetViewStar(current);
+                    }
+                });
+        }
+
+        private static void OnDysonClicked(int _)
+        {
+            StarData star = GetViewStar();
+            if (star == null
+                || (!BatterySphereManager.IsPlanned(star.index) && !HyperMassManager.IsPlanned(star.index))
+                || !CheckNoStructures(star, "switching to a Dyson Sphere"))
+            {
+                return;
+            }
+
             BatterySphereManager.SetPlanned(star.index, false);
+            HyperMassManager.SetPlanned(star.index, false);
         }
 
         private static void OnBatteryClicked(int _)
@@ -120,23 +211,67 @@ namespace SubspaceTransport
                 return;
             }
 
+            if (!CheckNoMegastructure(star) || !CheckNoStructures(star, "planning a Battery Sphere"))
+            {
+                return;
+            }
+
+            HyperMassManager.SetPlanned(star.index, false);
+            BatterySphereManager.SetPlanned(star.index, true);
+        }
+
+        private static void OnHyperClicked(int _)
+        {
+            StarData star = GetViewStar();
+            if (star == null || HyperMassManager.IsPlanned(star.index))
+            {
+                return;
+            }
+
+            if (!HyperMassContent.IsUnlocked)
+            {
+                UIRealtimeTip.Popup("Research Stellar Hyper Mass Inducer first.");
+                return;
+            }
+
+            if (!StarConversion.CanConvert(star))
+            {
+                UIRealtimeTip.Popup("A Hyper Mass Injector needs a main-sequence or giant star.");
+                return;
+            }
+
+            if (!CheckNoMegastructure(star) || !CheckNoStructures(star, "planning a Hyper Mass Injector"))
+            {
+                return;
+            }
+
+            BatterySphereManager.SetPlanned(star.index, false);
+            HyperMassManager.SetPlanned(star.index, true);
+        }
+
+        private static bool CheckNoMegastructure(StarData star)
+        {
             if (MoreMegaStructureCompat.HasMegastructure(star.index))
             {
                 UIRealtimeTip.Popup(
                     "This star has a More Megastructures structure planned. Switch it to a Dyson Sphere first.");
-                return;
+                return false;
             }
 
-            DysonSphere[] spheres = GameMain.data != null ? GameMain.data.dysonSpheres : null;
-            DysonSphere sphere = spheres != null && star.index < spheres.Length ? spheres[star.index] : null;
+            return true;
+        }
+
+        private static bool CheckNoStructures(StarData star, string action)
+        {
+            DysonSphere sphere = HyperMassManager.GetSphere(star.index);
             bool sandbox = GameMain.data.gameDesc != null && GameMain.data.gameDesc.isSandboxMode;
             if (sphere != null && sphere.totalNodeCount > 0 && !sandbox)
             {
-                UIRealtimeTip.Popup("Remove this star's Dyson Sphere structures before planning a Battery Sphere.");
-                return;
+                UIRealtimeTip.Popup("Remove this star's Dyson Sphere structures before " + action + ".");
+                return false;
             }
 
-            BatterySphereManager.SetPlanned(star.index, true);
+            return true;
         }
 
         private static StarData GetViewStar()
@@ -188,7 +323,7 @@ namespace SubspaceTransport
 
             UIButton handle = CreateButton(assemblerWindow, _panel, "handle", 0f, out _handleText);
             handle.tips.tipTitle = "Megastructure type";
-            handle.tips.tipText = "Show or hide the Dyson Sphere / Battery Sphere selector.";
+            handle.tips.tipText = "Show or hide the Dyson Sphere / Battery Sphere / Hyper Mass Injector selector.";
             handle.onClick += OnHandleClicked;
 
             GameObject bodyObject = new GameObject("body", typeof(RectTransform));
@@ -198,11 +333,12 @@ namespace SubspaceTransport
             _body.anchorMax = Vector2.up;
             _body.pivot = Vector2.up;
             _body.anchoredPosition = new Vector2(0f, -BodyTop);
-            _body.sizeDelta = new Vector2(PanelWidth, 2f * RowSpacing + StatusHeight);
+            _body.sizeDelta = new Vector2(PanelWidth, InjectTop + ButtonHeight);
 
             _dysonButton = CreateButton(assemblerWindow, _body, "dyson", 0f, out _dysonText);
             _dysonButton.tips.tipTitle = "Dyson Sphere";
-            _dysonButton.tips.tipText = "Use this star for an ordinary Dyson Sphere. Battery Rockets stay in the silo.";
+            _dysonButton.tips.tipText =
+                "Use this star for an ordinary Dyson Sphere. Battery and Hyper Mass Rockets stay in the silo.";
             _dysonButton.onClick += OnDysonClicked;
 
             _batteryButton = CreateButton(assemblerWindow, _body, "battery", RowSpacing, out _batteryText);
@@ -212,9 +348,29 @@ namespace SubspaceTransport
                 "subspace logistics. The star's Dyson Sphere must have no structures.";
             _batteryButton.onClick += OnBatteryClicked;
 
-            _status = CreateText(_body, "status", new Vector2(0f, -2f * RowSpacing), new Vector2(PanelWidth, StatusHeight));
-            _status.fontSize = 14;
-            AddPlateBehind(_status, StatusPlateColor);
+            _hyperButton = CreateButton(assemblerWindow, _body, "hyper-mass", 2f * RowSpacing, out _hyperText);
+            _hyperButton.tips.tipTitle = "Hyper Mass Injector";
+            _hyperButton.tips.tipText =
+                "Use this star for a Hyper Mass Injector. Only Hyper Mass Rockets build it. At " +
+                HyperMassManager.ActivationPower + " it can hyperinject the star into a hypergiant. " +
+                "The star's Dyson Sphere must have no structures.";
+            _hyperButton.onClick += OnHyperClicked;
+
+            _injectButton = CreateButton(assemblerWindow, _body, "hyperinject", InjectTop, out _injectText);
+            _injectText.text = "Hyperinject Mass into the Star";
+            _injectButton.tips.tipTitle = "Hyperinject Mass into the Star";
+            _injectButton.tips.tipText =
+                "Available once this Hyper Mass Injector's sphere generates " + HyperMassManager.ActivationPower +
+                ". Turns the star into a hypergiant at the luminosity your Stellar Hyper Mass research allows. " +
+                "Hyperinject again after more Amplification research to grow it further.";
+            _injectButton.onClick += OnInjectClicked;
+
+            AddPlate(_body, "status-backdrop", new Vector2(0f, -StatusTop), new Vector2(PanelWidth, StatusHeight), StatusPlateColor);
+            _status = CreateText(
+                _body,
+                "status",
+                new Vector2(StatusPadding, -StatusTop - StatusPadding),
+                new Vector2(PanelWidth - 2f * StatusPadding, StatusHeight - 2f * StatusPadding));
             ApplyExpanded();
             _editor = editor;
             _lastStatus = null;
@@ -257,12 +413,16 @@ namespace SubspaceTransport
             UIButton button = buttonObject.GetComponent<UIButton>();
             Transform textTransform = buttonObject.transform.Find("Text");
             text = textTransform.GetComponent<Text>();
-            AddContrastShadow(text);
-            Localizer localizer = textTransform.GetComponent<Localizer>();
-            if (localizer != null)
+            StripTextStyling(text);
+            if (_font == null)
             {
-                UnityEngine.Object.DestroyImmediate(localizer);
+                _font = text.font;
             }
+
+            text.fontSize = LabelFontSize;
+            text.alignment = TextAnchor.MiddleCenter;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            AddContrastShadow(text);
 
             AddBackdrop(buttonObject.transform, ButtonPlateColor);
 
@@ -293,22 +453,37 @@ namespace SubspaceTransport
             image.raycastTarget = false;
         }
 
-        // Children draw over their parent, so a plate for a Text sits behind it as a sibling instead.
-        private static void AddPlateBehind(Text text, Color color)
+        // Children draw over their parent, so a plate for a Text is a sibling created before it.
+        private static void AddPlate(Transform parent, string name, Vector2 position, Vector2 size, Color color)
         {
-            RectTransform source = (RectTransform)text.transform;
-            GameObject plateObject = new GameObject("status-backdrop", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            GameObject plateObject = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
             RectTransform plate = (RectTransform)plateObject.transform;
-            plate.SetParent(source.parent, false);
-            plate.anchorMin = source.anchorMin;
-            plate.anchorMax = source.anchorMax;
-            plate.pivot = source.pivot;
-            plate.anchoredPosition = source.anchoredPosition;
-            plate.sizeDelta = source.sizeDelta;
-            plate.SetSiblingIndex(source.GetSiblingIndex());
+            plate.SetParent(parent, false);
+            plate.anchorMin = Vector2.up;
+            plate.anchorMax = Vector2.up;
+            plate.pivot = Vector2.up;
+            plate.anchoredPosition = position;
+            plate.sizeDelta = size;
             Image image = plateObject.GetComponent<Image>();
             image.color = color;
             image.raycastTarget = false;
+        }
+
+        // The copied button label carries the game's glow effects, glow material, localizer and best-fit sizing,
+        // which blur and squash custom labels on the dark plates.
+        private static void StripTextStyling(Text text)
+        {
+            foreach (Component component in text.GetComponents<Component>())
+            {
+                if (!(component is RectTransform) && !(component is CanvasRenderer) && !(component is Text))
+                {
+                    UnityEngine.Object.DestroyImmediate(component);
+                }
+            }
+
+            text.material = null;
+            text.resizeTextForBestFit = false;
+            text.fontStyle = FontStyle.Normal;
         }
 
         private static void AddContrastShadow(Text text)
@@ -333,13 +508,14 @@ namespace SubspaceTransport
             rect.sizeDelta = size;
 
             Text text = textObject.GetComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-            text.fontSize = 15;
-            text.color = Color.white;
+            text.font = _font != null ? _font : Resources.GetBuiltinResource<Font>("Arial.ttf");
+            text.fontSize = StatusFontSize;
+            text.lineSpacing = 1.1f;
             text.alignment = TextAnchor.UpperLeft;
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
             text.verticalOverflow = VerticalWrapMode.Overflow;
             text.raycastTarget = false;
+            text.supportRichText = false;
             text.color = NormalTextColor;
             AddContrastShadow(text);
             return text;

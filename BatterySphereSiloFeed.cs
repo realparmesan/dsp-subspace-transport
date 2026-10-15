@@ -2,26 +2,48 @@ using HarmonyLib;
 
 namespace SubspaceTransport
 {
-    // Vertical launching silos take both Small Carrier Rockets and Battery Rockets through belts, sorters and
-    // the silo window. An empty, idle silo follows whichever rocket type is offered; the launch then goes to the
-    // Dyson Sphere or the Battery Sphere according to the rocket and the star's planned sphere type.
+    // Vertical launching silos take Small Carrier Rockets, Battery Rockets and Hyper Mass Rockets through belts,
+    // sorters and the silo window. An empty, idle silo follows whichever rocket type is offered; the launch then
+    // goes to the Dyson Sphere, Battery Sphere or Hyper Mass Injector according to the rocket and the star's
+    // planned sphere type.
     internal static class BatterySphereSiloFeed
     {
+        private static readonly int[] Rockets =
+        {
+            ItemProto.kRocketId,
+            BatterySphereContent.ItemId,
+            HyperMassContent.ItemId
+        };
+
         private static bool IsRocket(int itemId)
         {
-            return itemId == ItemProto.kRocketId || itemId == BatterySphereContent.ItemId;
+            return itemId == ItemProto.kRocketId
+                || (itemId == BatterySphereContent.ItemId && BatterySphereContent.IsUnlocked)
+                || (itemId == HyperMassContent.ItemId && HyperMassContent.IsUnlocked);
         }
 
-        // The other rocket type, offered to the silo's feeders only while it is empty and idle.
-        internal static int AlternateRocket(int bulletId)
+        // Fills needs[1] and needs[2] with the unlocked rocket types the silo isn't loaded with, offered to its
+        // feeders only while it is empty and idle.
+        internal static void OfferAlternateRockets(int[] needs, int bulletId, bool open)
         {
-            return bulletId == BatterySphereContent.ItemId ? ItemProto.kRocketId : BatterySphereContent.ItemId;
+            int slot = 1;
+            foreach (int rocket in Rockets)
+            {
+                if (open && rocket != bulletId && IsRocket(rocket) && slot < 3)
+                {
+                    needs[slot++] = rocket;
+                }
+            }
+
+            while (slot < 3)
+            {
+                needs[slot++] = 0;
+            }
         }
 
         internal static void Retarget(PlanetFactory factory, int siloId, int itemId)
         {
             if (!IsRocket(itemId)
-                || !BatterySphereContent.IsUnlocked
                 || factory == null
                 || factory.factorySystem == null
                 || siloId <= 0
@@ -57,13 +79,13 @@ namespace SubspaceTransport
     {
         private static void Postfix(SiloComponent __instance)
         {
-            if (__instance.needs == null || __instance.needs.Length < 2)
+            if (__instance.needs == null || __instance.needs.Length < 3)
             {
                 return;
             }
 
-            bool open = BatterySphereContent.IsUnlocked && __instance.bulletCount == 0 && __instance.time == 0;
-            __instance.needs[1] = open ? BatterySphereSiloFeed.AlternateRocket(__instance.bulletId) : 0;
+            bool open = __instance.bulletCount == 0 && __instance.time == 0;
+            BatterySphereSiloFeed.OfferAlternateRockets(__instance.needs, __instance.bulletId, open);
         }
     }
 

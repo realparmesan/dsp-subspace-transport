@@ -17,6 +17,8 @@ namespace SubspaceTransport
         internal const string BatterySphereEngineeringTech = PathPrefix + "battery_sphere_engineering_tech";
         internal const string SubspaceWarper = PathPrefix + "subspace_warper";
         internal const string BatteryRocket = PathPrefix + "battery_rocket";
+        internal const string StellarHyperMassInducerTech = PathPrefix + "stellar_hyper_mass_inducer_tech";
+        internal const string HyperMassRocket = PathPrefix + "hyper_mass_rocket";
 
         private static readonly Dictionary<string, Sprite> Sprites = new Dictionary<string, Sprite>();
 

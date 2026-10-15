@@ -4,8 +4,8 @@ using HarmonyLib;
 
 namespace SubspaceTransport
 {
-    // Optional interop with More Megastructures. A star can hold either a Battery Sphere or one of its
-    // megastructures, never both; each mod's selector refuses to switch a star the other has claimed.
+    // Optional interop with More Megastructures. A star can hold either a Battery Sphere, a Hyper Mass Injector or
+    // one of its megastructures, never two; each mod's selector refuses to switch a star the other has claimed.
     internal static class MoreMegaStructureCompat
     {
         internal const string PluginGuid = "Gnimaerd.DSP.plugin.MoreMegaStructure";
@@ -66,13 +66,24 @@ namespace SubspaceTransport
         private static bool SetMegaStructurePrefix(int type)
         {
             StarData star = _currentStarField.GetValue(null) as StarData;
-            if (star == null || type == DysonSphereType || !BatterySphereManager.IsPlanned(star.index))
+            if (star == null || type == DysonSphereType)
             {
                 return true;
             }
 
-            UIRealtimeTip.Popup("This star has a Battery Sphere planned. Switch it to a Dyson Sphere first.");
-            return false;
+            if (BatterySphereManager.IsPlanned(star.index))
+            {
+                UIRealtimeTip.Popup("This star has a Battery Sphere planned. Switch it to a Dyson Sphere first.");
+                return false;
+            }
+
+            if (HyperMassManager.IsPlanned(star.index))
+            {
+                UIRealtimeTip.Popup("This star has a Hyper Mass Injector planned. Switch it to a Dyson Sphere first.");
+                return false;
+            }
+
+            return true;
         }
     }
 }

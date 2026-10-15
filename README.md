@@ -6,7 +6,7 @@ Subspace Logistics appears on the main technology page after Interstellar Logist
 
 Instant shipments consume one Subspace Warper instead of Space Warpers. The sending station pays by default; if its Subspace Warper slot is empty, the receiving station pays instead, so a station can keep Subspace Warpers and pull cargo from senders that have none. Neither station needs Logistics Vessels, Space Warpers, or warp drive research for a wormhole transfer. The station's **Min. Load of Vessels** setting still applies: a station only dispatches once the supplying slot holds that share of a vessel's capacity, so wormhole cargo moves in batches. Subspace Warpers are assembled from 4 Space Warpers and 2 Graviton Lenses in an assembler (they are not craftable in the replicator). Each Interstellar Logistics Station has a dedicated Subspace Warper slot beneath its drone, vessel, and Space Warper slots, holding up to 100. The Control Panel shows the slot's count in the station list and the station inspector. Like the Space Warper slot, it fills from belts, from sorters, from a storage row containing Subspace Warpers, or by clicking it with Subspace Warpers in hand; clicking it with an empty hand takes them out. Subspace Warpers are excluded from instant cargo transfer to prevent them being shipped by the system that consumes them.
 
-The mod's items (Battery Rocket and Subspace Warper) are on their own **Subspace** tab in the recipe and item pickers.
+The mod's items (Battery Rocket, Hyper Mass Rocket and Subspace Warper) are on their own **Subspace** tab in the recipe and item pickers.
 
 ## Battery Sphere
 
@@ -18,9 +18,17 @@ To exchange batteries, enable Subspace Transport at participating Interstellar L
 
 Subspace Logistics targets vanilla Interstellar Logistics Station components only. It has no direct integration with Galactic Scale, Orbital Ring, or their mod-added structures and private/shared storage.
 
-More Megastructures is optional and compatible. The two mods use separate tech IDs (this mod uses 1950-1952), separate replicator tabs, and separate structure selectors in the Dyson Sphere editor. A star can hold either a Battery Sphere or a More Megastructures structure; each selector asks you to switch the star back to a Dyson Sphere before changing it to the other mod's type.
+## Stellar Hyper Mass Inducer
 
-**Save compatibility:** 0.6.0 changes the research IDs, so Subspace Logistics and Battery Sphere Engineering must be researched again in saves from earlier versions.
+Stellar Hyper Mass Inducer follows Subspace Logistics and costs the same as the first level of the repeatable Vein Utilization research. It unlocks the Hyper Mass Rocket (one Small Carrier Rocket plus two Subspace Warpers) and the **Hyper Mass Injector** type in the editor's Megastructure type selector. Only Hyper Mass Rockets build a Hyper Mass Injector: Carrier Rockets and Battery Rockets wait in the silo at that star. White dwarfs, neutron stars and black holes can't host one.
+
+Once the Hyper Mass Injector's sphere generates 1 MW (a testing value; 10 GW is planned), **Hyperinject Mass into the Star** (below the status in the selector) becomes available. After a confirmation it turns the star into a hypergiant at 2.5 L, or at the star's own luminosity if that is higher. Its mass, temperature and radius grow to match, it becomes an O-class giant (a blue or violet hypergiant), and the luminosity of every planet in the system is recalculated, so solar panels there produce more. A sphere rebuilt on the star produces at the new luminosity. Stellar Hyper Mass Amplification adds 50 levels of +0.02 L each, up to 3.5 L; hyperinject the star again to apply them. The star's colour moves from hyper blue at 2.5 L to hyper violet at 3.5 L, and its radius grows 3x to 6x on top of the extra mass, but the star never reaches past 60% of its innermost planet's orbit. Hyperinjection consumes the Hyper Mass Injector sphere: every structure, sail and rocket on it is destroyed, and an empty sphere is left to rebuild (for example to hyperinject again after more Amplification research). It is permanent and is saved with the game.
+
+More Megastructures is optional and compatible. The two mods use separate tech IDs (this mod uses 1950, 1951, 1953, 2950 and 2951), separate replicator tabs, and separate structure selectors in the Dyson Sphere editor. A star can hold one of a Battery Sphere, a Hyper Mass Injector or a More Megastructures structure; each selector asks you to switch the star back to a Dyson Sphere before changing it to the other mod's type.
+
+**Upgrades tab:** Subspace Efficiency and Stellar Hyper Mass Amplification are repeatable upgrades, so they sit on the technology window's **Upgrades** tab in a new row under the vanilla upgrades. Each tech's tooltip lists what a level adds under "Unlocks", and the tab's statistics panel (third page) shows the current station energy use and hyperinjection luminosity.
+
+**Save compatibility:** 0.6.0 changes the research IDs, so Subspace Logistics, Battery Sphere Engineering and Subspace Efficiency must be researched again in saves from earlier versions.
 
 ## Requirements
 
@@ -62,7 +70,9 @@ This creates `dist/SubspaceTransport-0.6.0.zip`, with the manifest, readme, icon
 - `BatterySphereContent.cs` — registers the Battery Sphere rocket and research unlock
 - `BatterySphereManager.cs` — tracks independent per-star projects and accumulator exchange
 - `BatterySphereEditorUI.cs` — megastructure type selector and project status in the Dyson Sphere editor
-- `BatterySphereSiloFeed.cs` — lets silos accept both rocket types; the launch follows the star's sphere type
+- `BatterySphereSiloFeed.cs` — lets silos accept all three rocket types; the launch follows the star's sphere type
+- `HyperMassContent.cs` — registers the Hyper Mass Rocket and the two Stellar Hyper Mass techs
+- `HyperMassManager.cs` — Hyper Mass Injector projects, star hyperinjection and the hypergiant star visuals
 - `InstantTransportPatches.cs` — station dispatch, energy cost, and cargo transfer
 - `StationSettings.cs` — per-station Subspace Transport setting and Subspace Warper slot, saved per game
 - `SubspaceWarperSlotPatches.cs` — fills and empties the Subspace Warper slot (belts, sorters, storage rows, dismantling)

@@ -115,13 +115,13 @@ namespace SubspaceTransport
                 AdvancePowerUnsafe(tick);
                 _lastProcessedTick = tick;
 
-                if (GetTotalOutputWattsUnsafe() <= 0L)
+                // Already-charged batteries stay deliverable when the sphere is producing no power.
+                if (GetTotalOutputWattsUnsafe() > 0L)
                 {
-                    return;
+                    CollectEmptyAccumulatorsUnsafe(stationPool, traffic, shipWarpSpeed);
+                    ChargeAccumulatorsUnsafe();
                 }
 
-                CollectEmptyAccumulatorsUnsafe(stationPool, traffic, shipWarpSpeed);
-                ChargeAccumulatorsUnsafe();
                 SupplyChargedAccumulatorsUnsafe(stationPool, traffic, shipWarpSpeed);
             }
         }
@@ -350,8 +350,14 @@ namespace SubspaceTransport
             for (int stationIndex = 1; stationIndex < stationPool.Length; stationIndex++)
             {
                 StationComponent station = stationPool[stationIndex];
-                if (!CanUseStation(station) || _chargedAccumulatorCount <= 0)
+                if (_chargedAccumulatorCount <= 0)
                 {
+                    continue;
+                }
+
+                if (!CanUseStation(station))
+                {
+                    LogUnusableDemandStation(station);
                     continue;
                 }
 
@@ -369,8 +375,15 @@ namespace SubspaceTransport
                         }
 
                         int demandCount = Math.Min(store.remoteDemandCount, _chargedAccumulatorCount);
-                        if (demandCount <= GetMinimumLoad(station, store.max))
+                        int minimumLoad = GetMinimumLoad(station, store.max);
+                        if (demandCount <= minimumLoad)
                         {
+                            TransportDiagnostics.Once(
+                                station,
+                                "battery-minload",
+                                "wants charged batteries but demand " + demandCount + " (remote demand " +
+                                store.remoteDemandCount + ", pool " + _chargedAccumulatorCount +
+                                ") does not exceed its minimum load " + minimumLoad + ".");
                             continue;
                         }
 
@@ -380,6 +393,11 @@ namespace SubspaceTransport
                             || station.energy < energyCost
                             || !StationSettings.TryConsumeSubspaceWarper(station))
                         {
+                            TransportDiagnostics.Once(
+                                station,
+                                "battery-supply-blocked",
+                                "cannot receive charged batteries: energy " + station.energy + " vs cost " +
+                                energyCost + ", or no Subspace Warper to consume.");
                             continue;
                         }
 
@@ -398,6 +416,29 @@ namespace SubspaceTransport
 
         // The station's minimum vessel load setting, as vessel dispatch applies it: a transfer must carry more
         // than this many items, but never more than the slot can hold.
+        private static void LogUnusableDemandStation(StationComponent station)
+        {
+            if (station == null || station.storage == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < station.storage.Length; i++)
+            {
+                StationStore store = station.storage[i];
+                if (store.itemId == ItemProto.kAccumulatorFull && store.remoteLogic == ELogisticStorage.Demand)
+                {
+                    TransportDiagnostics.Once(
+                        station,
+                        "battery-unusable",
+                        "demands charged batteries but cannot use the Battery Sphere: stellar=" +
+                        station.isStellar + ", enabled=" + StationSettings.IsEnabled(station) +
+                        ", warpers=" + StationSettings.GetSubspaceWarperCount(station) + ".");
+                    return;
+                }
+            }
+        }
+
         private static int GetMinimumLoad(StationComponent station, int slotMax)
         {
             int carries = GameMain.history != null ? GameMain.history.logisticShipCarries : 1;
@@ -468,26 +509,36 @@ namespace SubspaceTransport
         {
             __state = new SiloState { Mode = _mode, StarIndex = _launchStarIndex };
             _mode = LaunchMode.Vanilla;
-            if (__instance.bulletId != BatterySphereContent.ItemId)
-            {
-                return;
-            }
+            bool battery = __instance.bulletId == BatterySphereContent.ItemId;
+            bool hyperMass = __instance.bulletId == HyperMassContent.ItemId;
 
             // planetId is starId * 100 + planet number, and starId is the star index + 1.
             _launchStarIndex = __instance.planetId / 100 - 1;
             bool validStar = GameMain.galaxy != null
                 && _launchStarIndex >= 0
                 && _launchStarIndex < GameMain.galaxy.starCount;
-            if (!validStar
-                || !BatterySphereContent.IsUnlocked
-                || !BatterySphereManager.IsPlanned(_launchStarIndex))
+            if (!battery && !hyperMass)
             {
-                // Battery Rockets wait in the silo until a Battery Sphere is planned at this star.
+                // Only Hyper Mass Rockets build a Hyper Mass Injector; Carrier Rockets wait in the silo.
+                if (validStar && HyperMassManager.IsPlanned(_launchStarIndex))
+                {
+                    _mode = LaunchMode.Block;
+                }
+
+                return;
+            }
+
+            bool planned = battery
+                ? BatterySphereContent.IsUnlocked && BatterySphereManager.IsPlanned(_launchStarIndex)
+                : HyperMassContent.IsUnlocked && HyperMassManager.IsPlanned(_launchStarIndex);
+            if (!validStar || !planned)
+            {
+                // Project rockets wait in the silo until their sphere type is planned at this star.
                 _mode = LaunchMode.Block;
                 return;
             }
 
-            // A planned star builds with Battery Rockets exactly like a Dyson Sphere does with Carrier Rockets.
+            // A planned star builds with project rockets exactly like a Dyson Sphere does with Carrier Rockets.
             _mode = LaunchMode.Capture;
             if (sphere == null && GameMain.data != null)
             {

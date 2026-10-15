@@ -18,8 +18,9 @@ that every described feature is already present.
 - A Battery Sphere is a real Dyson Sphere at a star planned as a Battery Sphere:
   Battery Rockets build its nodes, frames and shells, and its generated power
   charges accumulators.
-- There is currently no Stellar Hyper Mass Inducer research, hyper-mass rocket,
-  hyper-mass Dyson Sphere category, or star-conversion behavior.
+- Stellar Hyper Mass Inducer (1953), Stellar Hyper Mass Amplification (2951,
+  50 levels, on the Upgrades tab; Subspace Efficiency is 2950 there too), the Hyper Mass Rocket (11998) and the Hyper Mass Injector
+  project are implemented (2026-10-15). See "Decisions" below.
 - Subspace Logistics, Subspace Efficiency and Battery Sphere Engineering each
   have their own technology icon, and their tree nodes no longer overlap.
 
@@ -114,7 +115,34 @@ intended.
 - The conversion should be attached to the Hyper Mass Injector project and
   should not alter or consume the player's Battery Sphere project.
 
+## Decisions (2026-10-15)
+
+- Activation threshold is **1 MW** for now (`HyperMassManager.ActivationWatts`),
+  to be raised to 10 GW after testing. It is measured as the
+  sphere's generated power, the same statistic the Battery Sphere status shows.
+- Amplification has **50 levels of +0.02 L** each (`HyperMassContent.LuminosityPerLevel`
+  and `AmplificationMaximumLevel`), so 50 upgrades take a star from 2.5 L to
+  the 3.5 L maximum (`HyperMassContent.MaximumLuminosity`), which is also the
+  violet end of the blue-to-violet range.
+- Luminosity is the absolute value the star detail panel shows (`dysonLumino`):
+  2.5 L from the inducer, +0.02 L per Amplification level (max 3.5 L). A star
+  that is already brighter keeps its own luminosity.
+- Research cost copies the last Vein Utilization tech (found by its
+  mining-cost unlock function); Amplification follows its cost curve.
+- Rocket recipe: 1 Small Carrier Rocket + 2 Subspace Warpers, 30 s.
+- Hyperinjection asks for confirmation, is permanent, and destroys the
+  injector sphere (an empty one is left in its place). It can be repeated
+  after more Amplification research.
+- Mass follows luminosity (L = M^0.7), temperature follows mass (StarGen's
+  formula), radius grows 3-6x on top of the mass scaling but stops at 60% of the
+  innermost planet's orbit. The star becomes a giant (O-class) star. Planet solar
+  luminosity is recalculated. Colour goes from blue (2.5 L) to violet (3.5 L).
+- Only Hyper Mass Rockets build at a Hyper Mass Injector star.
+
 ## Open questions for implementation
+
+Superseded by the decisions above for the Stellar Hyper Mass feature; kept for
+reference.
 
 These points were not settled in the request and should be resolved before
 locking down implementation details:
