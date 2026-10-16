@@ -23,7 +23,7 @@ namespace SubspaceTransport
             bool any = false;
             foreach (TechProto proto in LDB.techs.dataArray)
             {
-                if (proto == null || proto.page != 1 || proto.ID == WormholeEfficiencyTechnology.TechnologyId
+                if (proto == null || proto.ID < 2000 || proto.ID == WormholeEfficiencyTechnology.TechnologyId
                     || proto.ID == HyperMassContent.AmplificationTechnologyId)
                 {
                     continue;
@@ -34,6 +34,9 @@ namespace SubspaceTransport
                 any = true;
             }
 
+            Plugin.ModLogger?.LogInfo(
+                "Upgrades tab: " + (any ? "vanilla upgrades span from x=" + minimumX + ", to y=" + maximumY
+                    : "no vanilla upgrade techs found") + "; placing column " + column + " in a new row.");
             return new Vector2(minimumX + column * ColumnSpacing, maximumY + RowSpacing);
         }
 

@@ -379,6 +379,7 @@ namespace SubspaceTransport
             UpdateSphere(star);
             RefreshSimulator(star);
             RefreshStarmap(star);
+            RefreshEditor(star);
         }
 
         private static float TemperatureForMass(float mass)
@@ -516,6 +517,35 @@ namespace SubspaceTransport
             }
         }
 
+        // The Dyson Sphere editor sizes and colours its star only when its view star changes, so a conversion made
+        // while the editor already shows that star needs the editor to run that step again.
+        private static void RefreshEditor(StarData star)
+        {
+            UIDysonEditor editor = UIRoot.instance != null && UIRoot.instance.uiGame != null
+                ? UIRoot.instance.uiGame.dysonEditor
+                : null;
+            if (editor?.selection == null || editor.selection.viewStar != star)
+            {
+                return;
+            }
+
+            AccessTools.Method(typeof(UIDysonEditor), "OnViewStarChange")?.Invoke(editor, null);
+        }
+
+        internal static void TintEditorStar(UIDysonEditor editor)
+        {
+            StarData star = editor.selection != null ? editor.selection.viewStar : null;
+            if (!IsConverted(star))
+            {
+                return;
+            }
+
+            TintMaterial(EditorStarMaterial(editor), editor.starMats, GetHue(star));
+        }
+
+        private static readonly AccessTools.FieldRef<UIDysonEditor, Material> EditorStarMaterial =
+            AccessTools.FieldRefAccess<UIDysonEditor, Material>("starMaterial");
+
         internal static void TintStarmapObject(UIStarmapStarObject starObject)
         {
             StarData star = starObject.star;
@@ -647,6 +677,15 @@ namespace SubspaceTransport
         private static void Postfix(StarSimulator __instance)
         {
             StarConversion.TintSimulator(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(UIDysonEditor), "OnViewStarChange")]
+    internal static class HyperMassEditorStarPatch
+    {
+        private static void Postfix(UIDysonEditor __instance)
+        {
+            StarConversion.TintEditorStar(__instance);
         }
     }
 

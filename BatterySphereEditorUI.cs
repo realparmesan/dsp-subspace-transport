@@ -27,6 +27,13 @@ namespace SubspaceTransport
         private const int StatusFontSize = 14;
         private const float StatusPadding = 8f;
 
+        // Accumulator counts for a Battery Sphere, in a panel to the right of the selector.
+        private const float CountsPanelWidth = 170f;
+        private const float CountsPanelGap = 8f;
+        private const float CountsHeaderHeight = 26f;
+        private const float CountsRowHeight = 36f;
+        private const float CountsIconSize = 32f;
+
         private static readonly Color SelectedTextColor = new Color(1f, 0.82f, 0.25f, 1f);
         private static readonly Color ButtonPlateColor = new Color(0.05f, 0.09f, 0.13f, 0.94f);
         private static readonly Color StatusPlateColor = new Color(0.05f, 0.09f, 0.13f, 0.8f);
@@ -52,6 +59,11 @@ namespace SubspaceTransport
         private static Text _injectText;
         private static Text _status;
         private static string _lastStatus;
+        private static RectTransform _countsPanel;
+        private static Text _emptyCountText;
+        private static Text _chargedCountText;
+        private static int _lastEmpty = -1;
+        private static int _lastCharged = -1;
 
         private static void Postfix(UIDysonEditor __instance)
         {
@@ -74,6 +86,7 @@ namespace SubspaceTransport
             SetButtonState(_batteryButton, _batteryText, "Battery Sphere", planned);
             SetButtonState(_hyperButton, _hyperText, "Hyper Mass Injector", hyperPlanned);
             UpdateInjectButton(star, hyperPlanned);
+            UpdateCounts(star, planned);
 
             string status;
             if (hyperPlanned)
@@ -96,17 +109,41 @@ namespace SubspaceTransport
                 int charged;
                 BatterySphereManager.GetProjectStatus(star.index, out rockets, out power, out empty, out charged);
                 status = string.Format(
-                    "Battery Sphere Project\nSphere output: {0:N0} MW\n" +
-                    "Accumulator buffer: {1:N0} empty / {2:N0} charged",
-                    power / 1000000L,
-                    empty,
-                    charged);
+                    "Battery Sphere Project\nSphere output: {0:N0} MW",
+                    power / 1000000L);
             }
 
             if (_lastStatus != status)
             {
                 _status.text = status;
                 _lastStatus = status;
+            }
+        }
+
+        private static void UpdateCounts(StarData star, bool planned)
+        {
+            bool visible = planned && _expanded;
+            _countsPanel.gameObject.SetActive(visible);
+            if (!visible)
+            {
+                return;
+            }
+
+            int rockets;
+            long power;
+            int empty;
+            int charged;
+            BatterySphereManager.GetProjectStatus(star.index, out rockets, out power, out empty, out charged);
+            if (empty != _lastEmpty)
+            {
+                _emptyCountText.text = empty.ToString("N0");
+                _lastEmpty = empty;
+            }
+
+            if (charged != _lastCharged)
+            {
+                _chargedCountText.text = charged.ToString("N0");
+                _lastCharged = charged;
             }
         }
 
@@ -371,18 +408,86 @@ namespace SubspaceTransport
                 "status",
                 new Vector2(StatusPadding, -StatusTop - StatusPadding),
                 new Vector2(PanelWidth - 2f * StatusPadding, StatusHeight - 2f * StatusPadding));
+            CreateCountsPanel(_panel);
             ApplyExpanded();
             _editor = editor;
             _lastStatus = null;
+            _lastEmpty = -1;
+            _lastCharged = -1;
 
             // The editor treats clicks outside its GUI rects as clicks on the sphere view.
             if (editor.guiRects != null && Array.IndexOf(editor.guiRects, _panel) < 0)
             {
-                RectTransform[] rects = new RectTransform[editor.guiRects.Length + 1];
+                RectTransform[] rects = new RectTransform[editor.guiRects.Length + 2];
                 Array.Copy(editor.guiRects, rects, editor.guiRects.Length);
-                rects[rects.Length - 1] = _panel;
+                rects[rects.Length - 2] = _panel;
+                rects[rects.Length - 1] = _countsPanel;
                 editor.guiRects = rects;
             }
+        }
+
+        private static void CreateCountsPanel(RectTransform parent)
+        {
+            float height = CountsHeaderHeight + 2f * CountsRowHeight + StatusPadding;
+            GameObject panelObject = new GameObject(
+                "battery-counts",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(Image));
+            _countsPanel = (RectTransform)panelObject.transform;
+            _countsPanel.SetParent(parent, false);
+            _countsPanel.anchorMin = Vector2.up;
+            _countsPanel.anchorMax = Vector2.up;
+            _countsPanel.pivot = Vector2.up;
+            _countsPanel.anchoredPosition = new Vector2(PanelWidth + CountsPanelGap, -BodyTop);
+            _countsPanel.sizeDelta = new Vector2(CountsPanelWidth, height);
+            Image plate = panelObject.GetComponent<Image>();
+            plate.color = StatusPlateColor;
+            plate.raycastTarget = false;
+
+            Text header = CreateText(
+                _countsPanel,
+                "header",
+                new Vector2(StatusPadding, -StatusPadding),
+                new Vector2(CountsPanelWidth - 2f * StatusPadding, CountsHeaderHeight - StatusPadding));
+            header.text = "Accumulators";
+
+            _emptyCountText = CreateCountRow(0, ItemProto.kAccumulator);
+            _chargedCountText = CreateCountRow(1, ItemProto.kAccumulatorFull);
+            _countsPanel.gameObject.SetActive(false);
+        }
+
+        private static Text CreateCountRow(int row, int itemId)
+        {
+            float top = -CountsHeaderHeight - row * CountsRowHeight;
+            ItemProto proto = LDB.items.Select(itemId);
+            GameObject iconObject = new GameObject(
+                "icon-" + itemId,
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(Image));
+            RectTransform iconRect = (RectTransform)iconObject.transform;
+            iconRect.SetParent(_countsPanel, false);
+            iconRect.anchorMin = Vector2.up;
+            iconRect.anchorMax = Vector2.up;
+            iconRect.pivot = Vector2.up;
+            iconRect.anchoredPosition = new Vector2(StatusPadding, top - (CountsRowHeight - CountsIconSize) / 2f);
+            iconRect.sizeDelta = new Vector2(CountsIconSize, CountsIconSize);
+            Image icon = iconObject.GetComponent<Image>();
+            icon.sprite = proto != null ? proto.iconSprite : null;
+            icon.enabled = icon.sprite != null;
+            icon.raycastTarget = false;
+
+            float textLeft = StatusPadding + CountsIconSize + 8f;
+            Text count = CreateText(
+                _countsPanel,
+                "count-" + itemId,
+                new Vector2(textLeft, top),
+                new Vector2(CountsPanelWidth - textLeft - StatusPadding, CountsRowHeight));
+            count.alignment = TextAnchor.MiddleLeft;
+            count.fontSize = 18;
+            count.text = "0";
+            return count;
         }
 
         private static void OnHandleClicked(int _)

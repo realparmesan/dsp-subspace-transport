@@ -18,7 +18,7 @@ that every described feature is already present.
 - A Battery Sphere is a real Dyson Sphere at a star planned as a Battery Sphere:
   Battery Rockets build its nodes, frames and shells, and its generated power
   charges accumulators.
-- Stellar Hyper Mass Inducer (1953), Stellar Hyper Mass Amplification (2951,
+- Stellar Hyper Mass Inducer (1953), Stellar Hyper Mass Amplification (2970,
   50 levels, on the Upgrades tab; Subspace Efficiency is 2950 there too), the Hyper Mass Rocket (11998) and the Hyper Mass Injector
   project are implemented (2026-10-15). See "Decisions" below.
 - Subspace Logistics, Subspace Efficiency and Battery Sphere Engineering each

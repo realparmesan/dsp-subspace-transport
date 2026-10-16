@@ -67,8 +67,9 @@ namespace SubspaceTransport
                 IsHiddenTech = false,
                 PreItem = Array.Empty<int>(),
                 Position = UpgradesTab.GetPosition(0),
-                PreTechs = new[] { SubspaceLogisticsTechnology.TechnologyId },
-                PreTechsImplicit = Array.Empty<int>(),
+                // Implicit: still required, but the Upgrades tab has no node for Subspace Logistics to link to.
+                PreTechs = Array.Empty<int>(),
+                PreTechsImplicit = new[] { SubspaceLogisticsTechnology.TechnologyId },
                 Items = (int[])costReference.Items.Clone(),
                 ItemPoints = (int[])costReference.ItemPoints.Clone(),
                 HashNeeded = costReference.HashNeeded,

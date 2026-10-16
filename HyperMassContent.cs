@@ -17,7 +17,7 @@ namespace SubspaceTransport
 
         // An Upgrades tab tech (IDs of 2000 and up). It used to be 1954 on the main tab, so its names changed too:
         // LDBTool pins each name to an ID in its config.
-        internal const int AmplificationTechnologyId = 2951;
+        internal const int AmplificationTechnologyId = 2970;
         internal const int ItemId = 11998;
         internal const int RecipeId = 11998;
         internal const int AmplificationMaximumLevel = 50;
@@ -81,18 +81,32 @@ namespace SubspaceTransport
 
         internal static void Register()
         {
-            if (Array.Exists(
-                    LDB.techs.dataArray,
-                    proto => proto != null
-                        && (proto.ID == TechnologyId || proto.ID == AmplificationTechnologyId))
-                || Array.Exists(
-                    LDB.items.dataArray,
-                    item => item != null && item.ID == ItemId)
-                || Array.Exists(
-                    LDB.recipes.dataArray,
-                    recipe => recipe != null && recipe.ID == RecipeId))
+            string conflict = null;
+            TechProto techConflict = Array.Find(
+                LDB.techs.dataArray,
+                proto => proto != null
+                    && (proto.ID == TechnologyId || proto.ID == AmplificationTechnologyId));
+            ItemProto itemConflict = Array.Find(LDB.items.dataArray, item => item != null && item.ID == ItemId);
+            RecipeProto recipeConflict = Array.Find(
+                LDB.recipes.dataArray,
+                recipe => recipe != null && recipe.ID == RecipeId);
+            if (techConflict != null)
             {
-                throw new InvalidOperationException("A Stellar Hyper Mass prototype ID is already in use.");
+                conflict = "technology " + techConflict.ID + " (" + techConflict.name + ")";
+            }
+            else if (itemConflict != null)
+            {
+                conflict = "item " + itemConflict.ID + " (" + itemConflict.name + ")";
+            }
+            else if (recipeConflict != null)
+            {
+                conflict = "recipe " + recipeConflict.ID + " (" + recipeConflict.name + ")";
+            }
+
+            if (conflict != null)
+            {
+                throw new InvalidOperationException(
+                    "A Stellar Hyper Mass prototype ID is already in use by " + conflict + ".");
             }
 
             TechProto vanillaResearch = LDB.techs.Select(SubspaceLogisticsTechnology.InterstellarLogisticsTechnologyId);
@@ -205,8 +219,10 @@ namespace SubspaceTransport
                 IsHiddenTech = false,
                 PreItem = Array.Empty<int>(),
                 Position = position,
-                PreTechs = new[] { prerequisite },
-                PreTechsImplicit = Array.Empty<int>(),
+                // Upgrades-tab techs list their prerequisite as implicit: it is still required, but the tab has no
+                // node for it, so a drawn link would run off the page.
+                PreTechs = id >= 2000 ? Array.Empty<int>() : new[] { prerequisite },
+                PreTechsImplicit = id >= 2000 ? new[] { prerequisite } : Array.Empty<int>(),
                 Items = (int[])costReference.Items.Clone(),
                 ItemPoints = (int[])costReference.ItemPoints.Clone(),
                 UnlockRecipes = Array.Empty<int>(),
