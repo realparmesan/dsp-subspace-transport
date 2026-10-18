@@ -106,6 +106,7 @@ namespace SubspaceTransport
         public void Import(BinaryReader reader)
         {
             TransportDiagnostics.Reset();
+            StarInjectionAnimation.Reset();
             StationSettings.Import(reader);
             if (HasMoreData(reader))
             {
@@ -145,6 +146,7 @@ namespace SubspaceTransport
         public void IntoOtherSave()
         {
             TransportDiagnostics.Reset();
+            StarInjectionAnimation.Reset();
             StationSettings.Reset();
             BatterySphereManager.Reset();
             HyperMassManager.Reset();

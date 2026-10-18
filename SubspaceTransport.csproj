@@ -60,6 +60,10 @@
       <HintPath>$(DSPGameDataDir)/Managed/UnityEngine.ImageConversionModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.ParticleSystemModule">
+      <HintPath>$(DSPGameDataDir)/Managed/UnityEngine.ParticleSystemModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.TextRenderingModule">
       <HintPath>$(DSPGameDataDir)/Managed/UnityEngine.TextRenderingModule.dll</HintPath>
       <Private>false</Private>

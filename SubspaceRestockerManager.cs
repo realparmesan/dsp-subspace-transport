@@ -52,6 +52,7 @@ namespace SubspaceTransport
             }
 
             AdvanceTrips(player);
+            SubspaceDroneAnimation.GameTick();
             if (time % DispatchIntervalTicks != 0 || !SubspaceRestockerContent.IsUnlocked)
             {
                 return;
@@ -260,6 +261,7 @@ namespace SubspaceTransport
                         GridIndex = index,
                         RemainingTicks = TripTicks
                     });
+                    SubspaceDroneAnimation.Depart(source.Factory, source.Storage.entityId, itemId, taken);
                     need -= taken;
                 }
             }
@@ -343,7 +345,12 @@ namespace SubspaceTransport
             for (int i = Trips.Count - 1; i >= 0; i--)
             {
                 Trip trip = Trips[i];
-                if (--trip.RemainingTicks > 0)
+                if (--trip.RemainingTicks == SubspaceDroneAnimation.ArrivalTicks)
+                {
+                    SubspaceDroneAnimation.Arrive(trip.ItemId, trip.Count);
+                }
+
+                if (trip.RemainingTicks > 0)
                 {
                     continue;
                 }
@@ -463,6 +470,7 @@ namespace SubspaceTransport
         {
             Trips.Clear();
             Restockers.Clear();
+            SubspaceDroneAnimation.Reset();
             _lastScanTick = -1;
         }
     }

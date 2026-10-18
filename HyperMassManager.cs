@@ -150,7 +150,14 @@ namespace SubspaceTransport
 
             // The injector sphere is consumed by the conversion. The star is converted with no sphere around it, so
             // nothing limits its growth, and the empty replacement is created from the converted star.
+            // The conversion lands at the animation's core flash; the saved project already records it, so a save
+            // made before then converts the star on load.
             DestroySphere(star.index);
+            StarInjectionAnimation.Begin(star, () => Convert(star, target));
+        }
+
+        private static void Convert(StarData star, float target)
+        {
             StarConversion.Apply(star, target);
             DysonSphere replacement = GameMain.data.CreateDysonSphere(star.index);
             if (replacement != null)
