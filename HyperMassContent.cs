@@ -50,6 +50,9 @@ namespace SubspaceTransport
 
         internal static ManualLogSource Logger;
 
+        // The inducer's tree cell, for later techs that look for free cells before LDBTool adds it to LDB.techs.
+        internal static Vector2 InducerPosition { get; private set; }
+
         // Must run from Awake; see SubspaceWarperContent.RegisterTranslations.
         internal static void RegisterTranslations()
         {
@@ -158,6 +161,7 @@ namespace SubspaceTransport
                 new Vector2(8f, 8f),
                 new Vector2(8f, -8f),
                 new Vector2(12f, -4f));
+            InducerPosition = inducerPosition;
             TechProto inducer = CreateTechnology(
                 TechnologyId,
                 TechNameKey,

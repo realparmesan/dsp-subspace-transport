@@ -21,6 +21,8 @@ that every described feature is already present.
 - Stellar Hyper Mass Inducer (1953), Stellar Hyper Mass Amplification (2970,
   50 levels, on the Upgrades tab; Subspace Efficiency is 2950 there too), the Hyper Mass Rocket (11998) and the Hyper Mass Injector
   project are implemented (2026-10-15). See "Decisions" below.
+- Subspace Restocking (1955), the Subspace Restocker building (item 11995, model 560) and the Subspace
+  Drone (11994) are implemented (2026-10-18). See "Subspace Restocking decisions" below.
 - Subspace Logistics, Subspace Efficiency and Battery Sphere Engineering each
   have their own technology icon, and their tree nodes no longer overlap.
 
@@ -166,3 +168,16 @@ locking down implementation details:
 - Which sphere-creation UI/API should be used, and what compatibility is
   required with More Mega Structures?
 - Which vanilla science colors/shapes should guide the custom icon artwork?
+
+## Subspace Restocking decisions (2026-10-18)
+
+- Range is the whole cluster. Drones live in restockers, not on Icarus: each drone a restocker holds is one
+  concurrent trip from it.
+- The delivery package's vanilla slider is reused: "at least" is the request level and "at most" the maximum.
+  "No recycling" makes the request level the target too.
+- One trip uses one Subspace Warper from the source restocker, carries up to 100x the Logistics Bot capacity
+  (`SubspaceRestockerManager.CarryMultiplier`), and takes a fixed 5 s (`TripTicks`).
+- Restocker slots 1 and 2 are locked to Subspace Drones (stack 10) and Subspace Warpers (stack 100). They are
+  first so the depot's automation limit, which bans slots from the end, never covers them. All drones and
+  warpers anywhere in the restocker count.
+- Item IDs stay below 12000 because `StorageComponent.AddItem` rejects higher IDs.
