@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Reflection;
+using System.Reflection.Emit;
 using HarmonyLib;
 
 namespace SubspaceTransport
@@ -252,6 +255,207 @@ namespace SubspaceTransport
 
             StationComponent station = stationPool[stationId];
             return station != null && station.id == stationId ? station : null;
+        }
+    }
+
+    // A belt slot's storageIdx picks what the slot outputs: 0 is nothing, 1..N a storage row, N + 1 the Space
+    // Warper. Subspace Warpers use -2, which vanilla treats as "nothing", so it skips such slots and the patches
+    // below do the output.
+    internal static class SubspaceWarperBeltOutput
+    {
+        internal const int StorageIdx = -2;
+
+        internal static bool IsOffered(StationComponent station)
+        {
+            return SubspaceLogisticsTechnology.IsUnlocked && StationSettings.IsWormholeStation(station);
+        }
+    }
+
+    [HarmonyPatch(typeof(StationComponent), "UpdateOutputSlots")]
+    internal static class SubspaceWarperBeltOutputPatch
+    {
+        // Runs before vanilla so the slot's cooldown behaves like vanilla's: an insert sets it to 1, and
+        // vanilla's decrement in the same call takes this 2 down to 1.
+        private static void Prefix(StationComponent __instance, CargoTraffic traffic)
+        {
+            if (__instance.isVeinCollector || __instance.slots == null || !SubspaceWarperBeltOutput.IsOffered(__instance))
+            {
+                return;
+            }
+
+            lock (__instance.storage)
+            {
+                for (int i = 0; i < __instance.slots.Length; i++)
+                {
+                    ref SlotData slot = ref __instance.slots[i];
+                    if (slot.dir != IODir.Output
+                        || slot.storageIdx != SubspaceWarperBeltOutput.StorageIdx
+                        || slot.counter > 0
+                        || slot.beltId == 0)
+                    {
+                        continue;
+                    }
+
+                    CargoPath path = traffic.GetCargoPath(traffic.beltPool[slot.beltId].segPathId);
+                    if (path == null
+                        || path.buffer[9] != 0
+                        || StationSettings.GetSubspaceWarperCount(__instance) <= 0
+                        || !path.TryInsertItemAtHeadAndFillBlank(SubspaceWarperContent.ItemId, 1, 0))
+                    {
+                        continue;
+                    }
+
+                    StationSettings.TryConsumeSubspaceWarper(__instance);
+                    slot.counter = 2;
+                }
+            }
+        }
+
+        // Vanilla blanks the belt's sign for a slot it treats as "nothing"; show the Subspace Warper instead.
+        private static void Postfix(StationComponent __instance, CargoTraffic traffic, SignData[] signPool, bool active)
+        {
+            if (!active
+                || __instance.isVeinCollector
+                || __instance.slots == null
+                || !SubspaceWarperBeltOutput.IsOffered(__instance))
+            {
+                return;
+            }
+
+            for (int i = 0; i < __instance.slots.Length; i++)
+            {
+                SlotData slot = __instance.slots[i];
+                if (slot.dir == IODir.Output
+                    && slot.storageIdx == SubspaceWarperBeltOutput.StorageIdx
+                    && slot.beltId != 0)
+                {
+                    int entityId = traffic.beltPool[slot.beltId].entityId;
+                    signPool[entityId].iconType = 1u;
+                    signPool[entityId].iconId0 = (uint)SubspaceWarperContent.ItemId;
+                }
+            }
+        }
+    }
+
+    // Adds the Subspace Warper after the storage rows and the Space Warper in both belt filter menus: the slot
+    // picker opened by clicking a station's belt port, and the tip shown while dragging a belt out of a station.
+    // Both share the vanilla fields filterItems, selectedIndex, outputEntityId and outputSlotId.
+    [HarmonyPatch]
+    internal static class SubspaceWarperSlotPickerPatch
+    {
+        private static IEnumerable<MethodBase> TargetMethods()
+        {
+            yield return AccessTools.Method(typeof(UISlotPicker), "SetOutputEntity");
+            yield return AccessTools.Method(typeof(UIBeltBuildTip), "SetOutputEntity");
+        }
+
+        // Inserted just before vanilla resets selectedIndex, once the Space Warper entry has been (or not been) added.
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
+        {
+            List<CodeInstruction> code = new List<CodeInstruction>(instructions);
+            string name = original.DeclaringType.Name;
+            FieldInfo isStellar = AccessTools.Field(typeof(StationComponent), "isStellar");
+            FieldInfo filterItems = AccessTools.Field(original.DeclaringType, "filterItems");
+            FieldInfo selectedIndex = AccessTools.Field(original.DeclaringType, "selectedIndex");
+
+            int stellarIndex = code.FindIndex(instruction => instruction.LoadsField(isStellar));
+            if (stellarIndex < 1)
+            {
+                Plugin.ModLogger?.LogError(name + " filter patch: could not find the Space Warper check.");
+                return code;
+            }
+
+            CodeInstruction stationLoad = code[stellarIndex - 1];
+            int storeIndex = code.FindIndex(stellarIndex, instruction => instruction.StoresField(selectedIndex));
+            if (storeIndex < 2)
+            {
+                Plugin.ModLogger?.LogError(name + " filter patch: could not find the selection reset.");
+                return code;
+            }
+
+            // code[storeIndex - 2] is the ldarg.0 starting "selectedIndex = 0"; branch targets land on it.
+            CodeInstruction anchor = code[storeIndex - 2];
+            CodeInstruction first = new CodeInstruction(OpCodes.Ldarg_0);
+            first.labels.AddRange(anchor.labels);
+            anchor.labels.Clear();
+            code.InsertRange(storeIndex - 2, new[]
+            {
+                first,
+                new CodeInstruction(OpCodes.Ldfld, filterItems),
+                new CodeInstruction(stationLoad.opcode, stationLoad.operand),
+                new CodeInstruction(
+                    OpCodes.Call,
+                    AccessTools.Method(typeof(SubspaceWarperSlotPickerPatch), nameof(AddSubspaceWarper)))
+            });
+            return code;
+        }
+
+        internal static void AddSubspaceWarper(List<int> filterItems, StationComponent station)
+        {
+            if (SubspaceWarperBeltOutput.IsOffered(station))
+            {
+                filterItems.Add(SubspaceWarperContent.ItemId);
+            }
+        }
+
+        // The vanilla index clamp turns the negative storageIdx into "nothing"; select the last entry instead.
+        private static void Postfix(object __instance, int entityId, int slot)
+        {
+            PlanetFactory factory = GameMain.mainPlayer?.factory;
+            if (factory == null || entityId <= 0 || slot < 0)
+            {
+                return;
+            }
+
+            int stationId = factory.entityPool[entityId].stationId;
+            StationComponent station = stationId > 0 ? factory.transport.stationPool[stationId] : null;
+            if (station == null || slot >= station.slots.Length
+                || station.slots[slot].storageIdx != SubspaceWarperBeltOutput.StorageIdx)
+            {
+                return;
+            }
+
+            Traverse menu = Traverse.Create(__instance);
+            List<int> filterItems = menu.Field("filterItems").GetValue<List<int>>();
+            if (filterItems != null && filterItems.Count > 0
+                && filterItems[filterItems.Count - 1] == SubspaceWarperContent.ItemId)
+            {
+                menu.Field("selectedIndex").SetValue(filterItems.Count - 1);
+            }
+        }
+    }
+
+    // Vanilla stores the selected index as the slot's storageIdx; store -2 when the Subspace Warper is selected.
+    [HarmonyPatch]
+    internal static class SubspaceWarperSlotPickerSelectPatch
+    {
+        private static IEnumerable<MethodBase> TargetMethods()
+        {
+            yield return AccessTools.Method(typeof(UISlotPicker), "SetFilterToEntity");
+            yield return AccessTools.Method(typeof(UIBeltBuildTip), "SetFilterToEntity");
+        }
+
+        private static void Postfix(object __instance)
+        {
+            Traverse menu = Traverse.Create(__instance);
+            List<int> filterItems = menu.Field("filterItems").GetValue<List<int>>();
+            int selectedIndex = menu.Field("selectedIndex").GetValue<int>();
+            int entityId = menu.Field("outputEntityId").GetValue<int>();
+            int slot = menu.Field("outputSlotId").GetValue<int>();
+            PlanetFactory factory = GameMain.mainPlayer?.factory;
+            if (filterItems == null || factory == null || entityId <= 0 || slot < 0
+                || selectedIndex < 0 || selectedIndex >= filterItems.Count
+                || filterItems[selectedIndex] != SubspaceWarperContent.ItemId)
+            {
+                return;
+            }
+
+            int stationId = factory.entityPool[entityId].stationId;
+            StationComponent station = stationId > 0 ? factory.transport.stationPool[stationId] : null;
+            if (station != null && slot < station.slots.Length)
+            {
+                station.slots[slot].storageIdx = SubspaceWarperBeltOutput.StorageIdx;
+            }
         }
     }
 }
