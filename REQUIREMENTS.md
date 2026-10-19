@@ -21,7 +21,7 @@ that every described feature is already present.
 - Stellar Hyper Mass Inducer (1953), Stellar Hyper Mass Amplification (2970,
   50 levels, on the Upgrades tab; Subspace Efficiency is 2950 there too), the Hyper Mass Rocket (11998) and the Hyper Mass Injector
   project are implemented (2026-10-15). See "Decisions" below.
-- Subspace Restocking (1955), the Subspace Restocker building (item 11995, model 560) and the Subspace
+- Subspace Restocking (1955), the Subspace Restocker building (item 11995, model 680; More Megastructures uses models 352-357 and 552-562) and the Subspace
   Drone (11994) are implemented (2026-10-18). See "Subspace Restocking decisions" below.
 - Subspace Logistics, Subspace Efficiency and Battery Sphere Engineering each
   have their own technology icon, and their tree nodes no longer overlap.

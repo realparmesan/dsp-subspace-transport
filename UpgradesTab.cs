@@ -13,14 +13,15 @@ namespace SubspaceTransport
     internal static class UpgradesTab
     {
         private const float RowSpacing = 4f;
-        private const float ColumnSpacing = 4f;
 
-        // The mod's techs sit in one new row under the vanilla upgrades, column 0 first.
-        internal static Vector2 GetPosition(int column)
+        // The mod's techs each get their own new row above the vanilla upgrades, spaced like the vanilla rows and
+        // starting at the vanilla left edge. Row 0 is the one nearest the vanilla upgrades.
+        internal static Vector2 GetPosition(int row)
         {
             float minimumX = 0f;
             float maximumY = 0f;
             bool any = false;
+            List<float> rowYs = new List<float>();
             foreach (TechProto proto in LDB.techs.dataArray)
             {
                 if (proto == null || proto.ID < 2000 || proto.ID == WormholeEfficiencyTechnology.TechnologyId
@@ -31,13 +32,33 @@ namespace SubspaceTransport
 
                 minimumX = any ? Mathf.Min(minimumX, proto.Position.x) : proto.Position.x;
                 maximumY = any ? Mathf.Max(maximumY, proto.Position.y) : proto.Position.y;
+                rowYs.Add(proto.Position.y);
                 any = true;
+            }
+
+            // The vanilla row pitch is the smallest gap between distinct rows.
+            float rowSpacing = RowSpacing;
+            List<float> distinctYs = rowYs.Distinct().OrderBy(y => y).ToList();
+            float smallestGap = float.MaxValue;
+            for (int i = 1; i < distinctYs.Count; i++)
+            {
+                float gap = distinctYs[i] - distinctYs[i - 1];
+                if (gap > 0.5f && gap < smallestGap)
+                {
+                    smallestGap = gap;
+                }
+            }
+
+            if (smallestGap < float.MaxValue)
+            {
+                rowSpacing = smallestGap;
             }
 
             Plugin.ModLogger?.LogInfo(
                 "Upgrades tab: " + (any ? "vanilla upgrades span from x=" + minimumX + ", to y=" + maximumY
-                    : "no vanilla upgrade techs found") + "; placing column " + column + " in a new row.");
-            return new Vector2(minimumX + column * ColumnSpacing, maximumY + RowSpacing);
+                    + " with row spacing " + rowSpacing : "no vanilla upgrade techs found")
+                + "; placing row " + row + " above them.");
+            return new Vector2(minimumX, maximumY + rowSpacing * (row + 1));
         }
 
         // What each level of an upgrade does, as the tooltip's "Unlocks" section lists it.

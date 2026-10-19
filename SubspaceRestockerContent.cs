@@ -20,8 +20,9 @@ namespace SubspaceTransport
         internal const int DroneItemId = 11994;
         internal const int DroneRecipeId = 11994;
 
-        // Model indices are saved with each building and must stay below ModelProto.MAX_ARRAY_SIZE.
-        internal const int RestockerModelId = 560;
+        // Model indices are saved with each building and must stay below ModelProto.MAX_ARRAY_SIZE. More
+        // Megastructures uses 352-357 and 552-562.
+        internal const int RestockerModelId = 680;
 
         // Ten columns like the vanilla depots; the last two grids are reserved for Subspace Drones and Warpers.
         internal const int StorageColumns = 10;
@@ -77,16 +78,27 @@ namespace SubspaceTransport
 
         internal static void Register()
         {
-            if (Array.Exists(LDB.techs.dataArray, proto => proto != null && proto.ID == TechnologyId)
-                || Array.Exists(
-                    LDB.items.dataArray,
-                    item => item != null && (item.ID == RestockerItemId || item.ID == DroneItemId))
-                || Array.Exists(
-                    LDB.recipes.dataArray,
-                    recipe => recipe != null && (recipe.ID == RestockerRecipeId || recipe.ID == DroneRecipeId))
-                || LDB.models.Select(RestockerModelId) != null)
+            TechProto techConflict = Array.Find(
+                LDB.techs.dataArray,
+                proto => proto != null && proto.ID == TechnologyId);
+            ItemProto itemConflict = Array.Find(
+                LDB.items.dataArray,
+                item => item != null && (item.ID == RestockerItemId || item.ID == DroneItemId));
+            RecipeProto recipeConflict = Array.Find(
+                LDB.recipes.dataArray,
+                recipe => recipe != null && (recipe.ID == RestockerRecipeId || recipe.ID == DroneRecipeId));
+            ModelProto modelConflict = Array.Find(
+                LDB.models.dataArray,
+                model => model != null && model.ID == RestockerModelId);
+            string conflict = techConflict != null ? "technology " + techConflict.ID + " (" + techConflict.name + ")"
+                : itemConflict != null ? "item " + itemConflict.ID + " (" + itemConflict.name + ")"
+                : recipeConflict != null ? "recipe " + recipeConflict.ID + " (" + recipeConflict.name + ")"
+                : modelConflict != null ? "model " + modelConflict.ID + " (" + modelConflict.PrefabPath + ")"
+                : null;
+            if (conflict != null)
             {
-                throw new InvalidOperationException("A Subspace Restocker prototype ID is already in use.");
+                throw new InvalidOperationException(
+                    "A Subspace Restocker prototype ID is already in use by " + conflict + ".");
             }
 
             TechProto vanillaResearch = LDB.techs.Select(SubspaceLogisticsTechnology.InterstellarLogisticsTechnologyId);
