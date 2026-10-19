@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
+using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 using HarmonyLib;
 using UnityEngine;
@@ -339,6 +341,13 @@ namespace SubspaceTransport
         {
             Snapshot snapshot;
             return star != null && Originals.TryGetValue(star, out snapshot);
+        }
+
+        // The star's mass as generated, before any hyperinjection.
+        internal static float GetOriginalMass(StarData star)
+        {
+            Snapshot snapshot;
+            return star != null && Originals.TryGetValue(star, out snapshot) ? snapshot.Mass : star.mass;
         }
 
         // 0 for a blue hypergiant at the base luminosity, 1 for a violet one at full Amplification.
@@ -713,6 +722,36 @@ namespace SubspaceTransport
             if (StarConversion.IsConverted(__instance))
             {
                 __result = StarConversion.GetVioletness(__instance) < 0.5f ? "Blue Hypergiant" : "Violet Hypergiant";
+            }
+        }
+    }
+
+    // The mecha's star gravity scales with mass, and sailing near a star spends energy to hold against it. A
+    // hypergiant's raised mass would pull hard enough to drain the mecha and outrun its thrust, so the mecha feels
+    // the star's original mass instead.
+    [HarmonyPatch(typeof(PlayerController), "ApplyGravity")]
+    internal static class HypergiantMechaGravityPatch
+    {
+        private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+        {
+            FieldInfo mass = AccessTools.Field(typeof(StarData), "mass");
+            MethodInfo originalMass = AccessTools.Method(typeof(StarConversion), nameof(StarConversion.GetOriginalMass));
+            int replaced = 0;
+            foreach (CodeInstruction instruction in instructions)
+            {
+                if (instruction.LoadsField(mass))
+                {
+                    instruction.opcode = OpCodes.Call;
+                    instruction.operand = originalMass;
+                    replaced++;
+                }
+
+                yield return instruction;
+            }
+
+            if (replaced == 0)
+            {
+                Plugin.ModLogger?.LogError("Hypergiant gravity patch: could not find the star mass in ApplyGravity.");
             }
         }
     }
