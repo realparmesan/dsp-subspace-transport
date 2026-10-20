@@ -398,11 +398,20 @@ namespace SubspaceTransport
             }
         }
 
+        // Vanilla returns early when the menu already shows this slot; the belt tool calls it every frame.
+        private static void Prefix(object __instance, int entityId, int slot, out bool __state)
+        {
+            Traverse menu = Traverse.Create(__instance);
+            __state = menu.Field("outputEntityId").GetValue<int>() != entityId
+                || menu.Field("outputSlotId").GetValue<int>() != slot;
+        }
+
         // The vanilla index clamp turns the negative storageIdx into "nothing"; select the last entry instead.
-        private static void Postfix(object __instance, int entityId, int slot)
+        // Only when the menu was rebuilt, so the player can still move the selection away from it.
+        private static void Postfix(object __instance, int entityId, int slot, bool __state)
         {
             PlanetFactory factory = GameMain.mainPlayer?.factory;
-            if (factory == null || entityId <= 0 || slot < 0)
+            if (!__state || factory == null || entityId <= 0 || slot < 0)
             {
                 return;
             }

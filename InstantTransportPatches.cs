@@ -306,8 +306,7 @@ namespace SubspaceTransport
             if (!SubspaceLogisticsTechnology.IsUnlocked
                 || source == null
                 || destination == null
-                || source.gid == destination.gid
-                || itemId == SubspaceWarperContent.ItemId)
+                || source.gid == destination.gid)
             {
                 return false;
             }

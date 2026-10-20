@@ -291,12 +291,13 @@ namespace SubspaceTransport
     // kept the first time it is converted, so converting again (after more research, or on load) never compounds.
     internal static class StarConversion
     {
-        // On top of the radius that the extra mass alone gives: 3x for a blue hypergiant, 6x for a violet one.
-        private const float GiantRadiusFactor = 3f;
-        private const float VioletRadiusFactor = 3f;
+        // Radius in solar radii: a blue hypergiant at the base luminosity, growing to a violet one at full
+        // Amplification.
+        private const float BlueRadius = 10f;
+        private const float VioletRadius = 20f;
 
-        // The star's surface may reach this fraction of the innermost planet's orbit.
-        private const float OrbitClearance = 0.6f;
+        // The star's visible surface may reach this fraction of the innermost planet's orbit.
+        private const float OrbitClearance = 0.8f;
 
         private static readonly Color HyperBlue = new Color(0.35f, 0.58f, 1f, 1f);
         private static readonly Color HyperViolet = new Color(0.66f, 0.3f, 1f, 1f);
@@ -381,9 +382,7 @@ namespace SubspaceTransport
             star.habitableRadius = original.HabitableRadius * Mathf.Sqrt(luminosityRatio);
 
             float violetness = GetVioletness(star);
-            float desiredRadius = original.Radius
-                * Mathf.Pow(star.mass / Mathf.Max(original.Mass, 0.0001f), 0.4f)
-                * (GiantRadiusFactor + VioletRadiusFactor * violetness);
+            float desiredRadius = Mathf.Lerp(BlueRadius, VioletRadius, violetness);
             star.radius = Mathf.Max(original.Radius, Mathf.Min(desiredRadius, GetRadiusLimit(star)));
 
             // Sphere layers default to dysonRadius, which must stay outside the bigger star.
@@ -404,6 +403,7 @@ namespace SubspaceTransport
         }
 
         // The star must stay clear of its planets and of any Dyson Sphere layer or swarm orbit already built.
+        // Returns a radius in solar radii.
         private static float GetRadiusLimit(StarData star)
         {
             float limit = float.MaxValue;
@@ -413,7 +413,7 @@ namespace SubspaceTransport
                 {
                     if (planet != null && planet.orbitAround == 0)
                     {
-                        limit = Mathf.Min(limit, planet.orbitRadius * 40000f * OrbitClearance);
+                        limit = Mathf.Min(limit, planet.orbitRadius * 40000f * OrbitClearance / StarData.kViewRadiusRatio);
                     }
                 }
             }
@@ -427,7 +427,7 @@ namespace SubspaceTransport
                     {
                         if (layer != null && layer.id > 0)
                         {
-                            limit = Mathf.Min(limit, layer.orbitRadius / 1.5f);
+                            limit = Mathf.Min(limit, layer.orbitRadius / 1.5f / StarData.kPhysicsRadiusRatio);
                         }
                     }
                 }
@@ -438,13 +438,13 @@ namespace SubspaceTransport
                     {
                         if (orbit.id > 0)
                         {
-                            limit = Mathf.Min(limit, orbit.radius / 1.5f);
+                            limit = Mathf.Min(limit, orbit.radius / 1.5f / StarData.kPhysicsRadiusRatio);
                         }
                     }
                 }
             }
 
-            return limit / StarData.kPhysicsRadiusRatio;
+            return limit;
         }
 
         // PlanetGen's solar luminosity, so solar panels in the system follow the brighter star.

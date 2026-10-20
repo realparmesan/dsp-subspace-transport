@@ -135,8 +135,9 @@ intended.
   injector sphere (an empty one is left in its place). It can be repeated
   after more Amplification research.
 - Mass follows luminosity (L = M^0.7), temperature follows mass (StarGen's
-  formula), radius grows 3-6x on top of the mass scaling but stops at 60% of the
-  innermost planet's orbit. The star becomes a giant (O-class) star. Planet solar
+  formula), radius grows from 10R (blue) to 20R (violet) with Amplification, never
+  shrinks below the original radius, and stops where the visible surface reaches 80% of
+  the innermost planet's orbit (or 1/1.5 of any Dyson Sphere layer or swarm orbit). The star becomes a giant (O-class) star. Planet solar
   luminosity is recalculated. Colour goes from blue (2.5 L) to violet (3.5 L).
 - Only Hyper Mass Rockets build at a Hyper Mass Injector star.
 

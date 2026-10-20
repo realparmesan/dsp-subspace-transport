@@ -293,15 +293,18 @@ namespace SubspaceTransport
                             continue;
                         }
 
+                        // Like a vessel, a pickup must carry more than the minimum load. The sphere's own buffer
+                        // can cap it too, so a nearly full buffer waits instead of taking a few at a time.
+                        int minimumLoad = GetMinimumLoad(station, store.max);
                         int supplyCount = Math.Min(store.count, store.remoteSupplyCount);
-                        if (supplyCount <= GetMinimumLoad(station, store.max))
+                        int transferCount = Math.Min(
+                            GetMaximumTransfer(),
+                            Math.Min(supplyCount, MaximumBatteryBuffer - _emptyAccumulatorCount));
+                        if (transferCount <= minimumLoad)
                         {
                             continue;
                         }
 
-                        int transferCount = Math.Min(
-                            GetMaximumTransfer(),
-                            Math.Min(supplyCount, MaximumBatteryBuffer - _emptyAccumulatorCount));
                         long energyCost = station.CalcTripEnergyCost(0.0, shipWarpSpeed, true);
                         if (transferCount <= 0
                             || station.energy < energyCost
