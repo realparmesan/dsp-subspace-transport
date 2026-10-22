@@ -25,7 +25,9 @@ namespace SubspaceTransport
             foreach (TechProto proto in LDB.techs.dataArray)
             {
                 if (proto == null || proto.ID < 2000 || proto.ID == WormholeEfficiencyTechnology.TechnologyId
-                    || proto.ID == HyperMassContent.AmplificationTechnologyId)
+                    || proto.ID == HyperMassContent.AmplificationTechnologyId
+                    // Retired upgrades (such as 3301-3306) are left unplaced at the origin, off the vanilla grid.
+                    || proto.Position == Vector2.zero)
                 {
                     continue;
                 }
