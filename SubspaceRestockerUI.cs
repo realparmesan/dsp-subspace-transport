@@ -4,119 +4,169 @@ using UnityEngine.UI;
 
 namespace SubspaceTransport
 {
-    [HarmonyPatch(typeof(UIStorageWindow), "OnStorageIdChange")]
+    [HarmonyPatch(typeof(UIStationWindow), "OnStationIdChange")]
     internal static class SubspaceRestockerWindowOpenPatch
     {
-        private static void Postfix(UIStorageWindow __instance)
+        private static void Postfix(UIStationWindow __instance)
         {
-            SubspaceRestockerUI.Refresh(__instance);
+            SubspaceRestockerUI.OnStationChanged(__instance);
         }
     }
 
-    // Also re-locks the reserved slots straight after the filter menu's "clear filters" resets them.
-    [HarmonyPatch(typeof(UIStorageWindow), "_OnUpdate")]
+    [HarmonyPatch(typeof(UIStationWindow), "_OnUpdate")]
     internal static class SubspaceRestockerWindowUpdatePatch
     {
-        private static void Postfix(UIStorageWindow __instance)
+        private static void Postfix(UIStationWindow __instance)
         {
-            SubspaceRestockerUI.Refresh(__instance);
+            SubspaceRestockerUI.Update(__instance);
         }
     }
 
-    // A status line in the depot window's title bar shows a Subspace Restocker's idle drones and Subspace Warpers.
+    [HarmonyPatch(typeof(UIStationWindow), "_OnClose")]
+    internal static class SubspaceRestockerWindowClosePatch
+    {
+        private static void Postfix(UIStationWindow __instance)
+        {
+            SubspaceRestockerUI.Deactivate(__instance);
+        }
+    }
+
+    // In a Subspace Restocker's station window, the vessel and Space Warper boxes, which planetary stations leave
+    // empty, hold Subspace Drones and Subspace Warpers instead.
     internal static class SubspaceRestockerUI
     {
-        private const string StatusObjectName = "subspace-restocker-status";
+        // The power group's width and energy bar length when an Interstellar Logistics Station shows its warper box.
+        private const float PowerGroupWidth = 320f;
+        private const float EnergyBarLength = 180f;
 
-        private static Text _status;
+        private const int VesselItemId = 5002;
+        private const int SpaceWarperItemId = 1210;
 
-        internal static void Refresh(UIStorageWindow window)
+        private static UIStationWindow _window;
+        private static bool _active;
+
+        internal static void OnStationChanged(UIStationWindow window)
         {
-            if (window == null || window.titleText == null)
+            StationComponent station = window.active ? StationWindowUI.GetCurrentStation(window) : null;
+            if (!SubspaceRestockerManager.IsRestocker(station))
             {
+                Deactivate(window);
                 return;
             }
 
-            StorageComponent storage = GetStorage(window);
-            bool show = window.active && SubspaceRestockerManager.IsRestocker(window.factory, storage);
-            if (!show)
+            if (_window != window)
             {
-                if (_status != null)
-                {
-                    _status.gameObject.SetActive(false);
-                }
-
-                return;
+                window.shipIconButton.onClick += OnDroneSlotClicked;
+                window.warperIconButton.onClick += OnWarperSlotClicked;
+                _window = window;
             }
 
-            if (_status == null && !CreateStatus(window))
-            {
-                return;
-            }
-
-            SubspaceRestockerManager.EnsureReservedSlots(storage);
-            int drones = storage.GetItemCount(SubspaceRestockerContent.DroneItemId);
-            int idle = Mathf.Max(0, drones - SubspaceRestockerManager.CountBusyDrones(window.factory, storage));
-            int warpers = storage.GetItemCount(SubspaceWarperContent.ItemId);
-            string text = "Subspace Drones " + idle + "/" + drones + " idle    Subspace Warpers " + warpers;
-            if (_status.text != text)
-            {
-                _status.text = text;
-            }
-
-            _status.gameObject.SetActive(true);
+            SetSlotIcons(window, SubspaceRestockerContent.DroneItemId, SubspaceWarperContent.ItemId);
+            _active = true;
+            ApplyLayout(window, station);
         }
 
-        private static bool CreateStatus(UIStorageWindow window)
+        internal static void Update(UIStationWindow window)
         {
-            Transform existing = window.titleText.transform.parent.Find(StatusObjectName);
-            if (existing != null)
+            if (!_active || window != _window)
             {
-                Object.Destroy(existing.gameObject);
+                return;
             }
 
-            GameObject statusObject = Object.Instantiate(window.titleText.gameObject, window.titleText.transform.parent);
-            statusObject.name = StatusObjectName;
-            Localizer localizer = statusObject.GetComponent<Localizer>();
-            if (localizer != null)
+            StationComponent station = StationWindowUI.GetCurrentStation(window);
+            if (!SubspaceRestockerManager.IsRestocker(station))
             {
-                Object.DestroyImmediate(localizer);
+                Deactivate(window);
+                return;
             }
 
-            _status = statusObject.GetComponent<Text>();
-            if (_status == null)
-            {
-                Object.Destroy(statusObject);
-                Plugin.ModLogger.LogError("The depot window title has no Text component to copy.");
-                return false;
-            }
-
-            // Right-aligned in the title bar, clear of the window's close button.
-            RectTransform rect = (RectTransform)statusObject.transform;
-            RectTransform title = (RectTransform)window.titleText.transform;
-            rect.anchorMin = new Vector2(1f, title.anchorMin.y);
-            rect.anchorMax = new Vector2(1f, title.anchorMax.y);
-            rect.pivot = new Vector2(1f, title.pivot.y);
-            rect.sizeDelta = new Vector2(360f, title.sizeDelta.y);
-            rect.anchoredPosition = new Vector2(-50f, title.anchoredPosition.y);
-            _status.alignment = TextAnchor.MiddleRight;
-            _status.fontSize = Mathf.Max(12, _status.fontSize - 2);
-            _status.horizontalOverflow = HorizontalWrapMode.Overflow;
-            _status.color = new Color(0.78f, 0.6f, 1f, 0.9f);
-            _status.raycastTarget = false;
-            return true;
+            ApplyLayout(window, station);
         }
 
-        private static StorageComponent GetStorage(UIStorageWindow window)
+        // Vanilla sets the boxes and power group when the station changes, so the next station's are already right.
+        internal static void Deactivate(UIStationWindow window)
         {
-            StorageComponent[] pool = window.factoryStorage != null ? window.factoryStorage.storagePool : null;
-            int id = window.storageId;
-            if (pool == null || id <= 0 || id >= pool.Length || pool[id] == null || pool[id].id != id)
+            if (!_active || window != _window)
             {
-                return null;
+                return;
             }
 
-            return pool[id];
+            _active = false;
+            SetSlotIcons(window, VesselItemId, SpaceWarperItemId);
+        }
+
+        // Vanilla sets some of these every update, so they are reapplied after it.
+        private static void ApplyLayout(UIStationWindow window, StationComponent station)
+        {
+            window.shipIconButton.gameObject.SetActive(true);
+            window.warperIconButton.gameObject.SetActive(true);
+            window.shipAutoReplenishButton.gameObject.SetActive(false);
+            window.powerGroupRect.sizeDelta = new Vector2(PowerGroupWidth, window.powerGroupRect.sizeDelta.y);
+
+            float charge = station.energyMax > 0 ? (float)((double)station.energy / station.energyMax) : 0f;
+            float energyX = charge > 0.7f ? EnergyBarLength * charge - 30f : EnergyBarLength * charge + 30f;
+            window.energyText.rectTransform.anchoredPosition = new Vector2(Mathf.Round(energyX), 0f);
+
+            int drones = StationSettings.GetSubspaceDroneCount(station);
+            int idle = Mathf.Max(0, drones - SubspaceRestockerManager.CountBusyDrones(station));
+            SetText(window.shipCountText, idle + "/" + drones);
+            SetText(window.warperCountText, StationSettings.GetSubspaceWarperCount(station).ToString());
+        }
+
+        private static void SetSlotIcons(UIStationWindow window, int shipSlotItemId, int warperSlotItemId)
+        {
+            ItemProto shipSlotItem = LDB.items.Select(shipSlotItemId);
+            ItemProto warperSlotItem = LDB.items.Select(warperSlotItemId);
+            window.shipIconImage.sprite = shipSlotItem != null ? shipSlotItem.iconSprite : null;
+            window.warperIconImage.sprite = warperSlotItem != null ? warperSlotItem.iconSprite : null;
+            window.shipIconButton.tips.itemId = shipSlotItemId;
+            window.warperIconButton.tips.itemId = warperSlotItemId;
+        }
+
+        private static void SetText(Text text, string value)
+        {
+            if (text.text != value)
+            {
+                text.text = value;
+            }
+        }
+
+        // Vanilla's own handlers ignore planetary stations, so these only act on restockers.
+        private static void OnDroneSlotClicked(int _)
+        {
+            StationComponent station = StationWindowUI.GetCurrentStation(_window);
+            Player player = _window != null ? _window.player : null;
+            if (!_active || player == null || !SubspaceRestockerManager.IsRestocker(station))
+            {
+                return;
+            }
+
+            // Only idle drones can be taken out; drones in flight still count against the slot.
+            StationWindowUI.ClickSlot(
+                player,
+                SubspaceRestockerContent.DroneItemId,
+                SubspaceRestockerContent.DroneSlotCapacity - StationSettings.GetSubspaceDroneCount(station),
+                count => StationSettings.AddSubspaceDrones(station, count),
+                () => StationSettings.TakeSubspaceDrones(
+                    station,
+                    StationSettings.GetSubspaceDroneCount(station) - SubspaceRestockerManager.CountBusyDrones(station)));
+        }
+
+        private static void OnWarperSlotClicked(int _)
+        {
+            StationComponent station = StationWindowUI.GetCurrentStation(_window);
+            Player player = _window != null ? _window.player : null;
+            if (!_active || player == null || !SubspaceRestockerManager.IsRestocker(station))
+            {
+                return;
+            }
+
+            StationWindowUI.ClickSlot(
+                player,
+                SubspaceWarperContent.ItemId,
+                StationSettings.SubspaceWarperMaxCount - StationSettings.GetSubspaceWarperCount(station),
+                count => StationSettings.AddSubspaceWarpers(station, count),
+                () => StationSettings.TakeAllSubspaceWarpers(station));
         }
     }
 }

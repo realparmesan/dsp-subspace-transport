@@ -259,7 +259,6 @@ namespace SubspaceTransport
             _rowCheck.enabled = enabled;
         }
 
-        // Same hand interactions as vanilla's Space Warper slot.
         private static void OnSlotClicked(int _)
         {
             StationComponent station = GetCurrentStation(_window);
@@ -269,7 +268,23 @@ namespace SubspaceTransport
                 return;
             }
 
-            int itemId = SubspaceWarperContent.ItemId;
+            ClickSlot(
+                player,
+                SubspaceWarperContent.ItemId,
+                StationSettings.SubspaceWarperMaxCount - StationSettings.GetSubspaceWarperCount(station),
+                count => StationSettings.AddSubspaceWarpers(station, count),
+                () => StationSettings.TakeAllSubspaceWarpers(station));
+        }
+
+        // Same hand interactions as vanilla's vessel and Space Warper slots: put in what the hand holds, up to the
+        // free space, or take everything out into the hand (or the inventory with Shift or Ctrl).
+        internal static void ClickSlot(
+            Player player,
+            int itemId,
+            int space,
+            System.Action<int> add,
+            System.Func<int> takeAll)
+        {
             if (player.inhandItemId > 0 && player.inhandItemCount == 0)
             {
                 player.SetHandItems(0, 0);
@@ -282,7 +297,6 @@ namespace SubspaceTransport
                     return;
                 }
 
-                int space = StationSettings.SubspaceWarperMaxCount - StationSettings.GetSubspaceWarperCount(station);
                 int added = Mathf.Min(player.inhandItemCount, Mathf.Max(space, 0));
                 if (added <= 0)
                 {
@@ -293,7 +307,7 @@ namespace SubspaceTransport
                 int handCount = player.inhandItemCount;
                 int handInc = player.inhandItemInc;
                 int removedInc = handCount > 0 ? handInc / handCount * added : 0;
-                StationSettings.AddSubspaceWarpers(station, added);
+                add(added);
                 player.AddHandItemCount_Unsafe(-added);
                 player.SetHandItemInc_Unsafe(handInc - removedInc);
                 if (player.inhandItemCount <= 0)
@@ -305,7 +319,7 @@ namespace SubspaceTransport
             }
             else if (player.inhandItemId == 0 && player.inhandItemCount == 0)
             {
-                int count = StationSettings.TakeAllSubspaceWarpers(station);
+                int count = takeAll();
                 if (count <= 0)
                 {
                     return;
@@ -317,7 +331,7 @@ namespace SubspaceTransport
                     UIItemup.Up(itemId, upCount);
                     if (upCount < count)
                     {
-                        StationSettings.AddSubspaceWarpers(station, count - upCount);
+                        add(count - upCount);
                     }
                 }
                 else
@@ -338,7 +352,7 @@ namespace SubspaceTransport
             }
         }
 
-        private static StationComponent GetCurrentStation(UIStationWindow stationWindow)
+        internal static StationComponent GetCurrentStation(UIStationWindow stationWindow)
         {
             if (stationWindow == null || stationWindow.transport == null
                 || stationWindow.transport.stationPool == null

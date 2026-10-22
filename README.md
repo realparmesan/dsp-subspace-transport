@@ -22,7 +22,7 @@ Subspace Logistics targets vanilla Interstellar Logistics Station components onl
 
 Subspace Restocking follows Subspace Logistics, alongside Battery Sphere Engineering, and costs the same. It unlocks two items:
 
-- **Subspace Restocker** (1 Depot Mk.II, 4 Processors, 2 Subspace Warpers): a violet depot with 80 slots that builds next to the depots on the build bar. Its first two slots are reserved: slot 1 holds up to 10 Subspace Drones and slot 2 up to 100 Subspace Warpers. Lock any other slot to an item with the depot's usual slot filters to reserve room for it. The window's title bar shows the idle drones and the Subspace Warpers.
+- **Subspace Restocker** (1 Planetary Logistics Station, 4 Processors, 2 Subspace Warpers): a violet Planetary Logistics Station at 70% size that builds next to the logistics stations on the build bar. It has five item slots, each set to an item, limit and local supply/demand like a station's, so belts, sorters and the planet's Logistics Drones keep it stocked. Beside the Logistics Drone slot, its window has a Subspace Drone slot (up to 10, showing idle/total) and a Subspace Warper slot (up to 100). Subspace Warpers reach their slot from belts and sorters like Space Warpers do on an Interstellar Logistics Station, can be sent out on a belt, and are also taken from an item slot set to Subspace Warpers when the slot is empty. It needs power and keeps a Planetary Logistics Station's spacing from other stations. It appears in the Control Panel with its items like any planetary station.
 - **Subspace Drone** (2 Logistics Bots, 1 Subspace Warper, assembler only).
 
 The drones restock Icarus' delivery package (the left-hand panel) from restockers anywhere in the cluster. Each slot's existing slider sets both limits: its **at least** value is the request level and its **at most** value the maximum. Once Icarus holds fewer than the request level (inventory, hand and the slot together, as vanilla counts it), an idle drone in the restocker with the most of that item brings back enough to reach the maximum. With "no recycling" the request level is also the target. A drone carries up to 100 times a Logistics Bot's load (1,000 items at the base capacity of 10), takes 5 seconds for the trip wherever the restocker is, and uses one Subspace Warper from the restocker it leaves. A top-up never exceeds the free room in the slot and the inventory. Items that still don't fit go back to the restocker, or are dropped beside Icarus if it is gone. The delivery package itself must be unlocked (vanilla unlocks it with the Logistics Distributor). Subspace Drones and Subspace Warpers are never fetched. Drones in flight are saved with the game. On the planet Icarus is on, a departing drone lifts off its restocker, flies a few metres and vanishes into subspace in a violet flash, and an arriving drone bursts out of subspace beside Icarus and flies in as its cargo arrives.
@@ -37,7 +37,7 @@ More Megastructures is optional and compatible. The two mods use separate tech I
 
 **Upgrades tab:** Subspace Efficiency and Stellar Hyper Mass Amplification are repeatable upgrades, so they sit on the technology window's **Upgrades** tab in a new row under the vanilla upgrades. Each tech's tooltip lists what a level adds under "Unlocks", and the tab's statistics panel (third page) shows the current station energy use and hyperinjection luminosity.
 
-**Save compatibility:** 0.6.0 changes the research IDs, so Subspace Logistics, Battery Sphere Engineering and Subspace Efficiency must be researched again in saves from earlier versions.
+**Save compatibility:** 0.6.0 changes the research IDs, so Subspace Logistics, Battery Sphere Engineering and Subspace Efficiency must be researched again in saves from earlier versions. 0.7.0 rebuilds the Subspace Restocker as a logistics station. Restockers built with earlier versions still load, but as plain violet depots that no longer send drones: pick them up (their contents return to the inventory) and build them again. Saves from 0.7.0 cannot be loaded by earlier versions.
 
 ## Requirements
 
@@ -67,7 +67,7 @@ With `DSP_GAME_DIR` (and, if needed, `DSP_BEPINEX_DIR`) set, run:
 bash scripts/package.sh
 ```
 
-This creates `dist/SubspaceTransport-0.6.0.zip`, with the manifest, readme, icon, and plugin DLL in Thunderstore's expected layout.
+This creates `dist/SubspaceTransport-0.7.0.zip`, with the manifest, readme, icon, and plugin DLL in Thunderstore's expected layout.
 
 ## Project files
 
@@ -82,8 +82,8 @@ This creates `dist/SubspaceTransport-0.6.0.zip`, with the manifest, readme, icon
 - `BatterySphereSiloFeed.cs` — lets silos accept all three rocket types; the launch follows the star's sphere type
 - `HyperMassContent.cs` — registers the Hyper Mass Rocket and the two Stellar Hyper Mass techs
 - `SubspaceRestockerContent.cs` — registers the Subspace Restocker building, Subspace Drone and Subspace Restocking research
-- `SubspaceRestockerManager.cs` — reserved restocker slots, drone dispatch and trips to the delivery package, saved per game
-- `SubspaceRestockerUI.cs` — idle drone and Subspace Warper status in the restocker's depot window
+- `SubspaceRestockerManager.cs` — the restocker registry, drone dispatch and trips to the delivery package, saved per game
+- `SubspaceRestockerUI.cs` — the Subspace Drone and Subspace Warper slots in the restocker's station window
 - `StarInjectionAnimation.cs` — the hyperinjection animation in space and in the Dyson Sphere editor
 - `SubspaceDroneAnimation.cs` — Subspace Drone departure and arrival animations, drawn as extra Logistics Bots
 - `HyperMassManager.cs` — Hyper Mass Injector projects, star hyperinjection and the hypergiant star visuals

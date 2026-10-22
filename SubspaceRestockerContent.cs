@@ -8,8 +8,8 @@ using xiaoye97;
 
 namespace SubspaceTransport
 {
-    // Subspace Restocking unlocks the Subspace Restocker, a depot whose Subspace Drones fetch items for Icarus'
-    // delivery package from anywhere in the cluster, and the Subspace Drone that it houses.
+    // Subspace Restocking unlocks the Subspace Restocker, a small planetary logistics station whose Subspace Drones
+    // fetch items for Icarus' delivery package from anywhere in the cluster, and the Subspace Drone that it houses.
     internal static class SubspaceRestockerContent
     {
         internal const int TechnologyId = 1955;
@@ -21,17 +21,30 @@ namespace SubspaceTransport
         internal const int DroneRecipeId = 11994;
 
         // Model indices are saved with each building and must stay below ModelProto.MAX_ARRAY_SIZE. More
-        // Megastructures uses 352-357 and 552-562.
-        internal const int RestockerModelId = 680;
+        // Megastructures uses 352-357 and 552-562. Restockers built before 0.7.0 were depots on model 680, which
+        // stays registered so those saves still load; they now behave as plain depots.
+        internal const int RestockerModelId = 681;
+        private const int LegacyDepotModelId = 680;
 
-        // Ten columns like the vanilla depots; the last two grids are reserved for Subspace Drones and Warpers.
-        internal const int StorageColumns = 10;
-        internal const int StorageRows = 8;
+        // Five item slots like an Interstellar Logistics Station, the most the Control Panel's station list shows;
+        // Subspace Drones and Warpers have their own slots.
+        internal const int StorageSlots = 5;
         internal const int DroneStackSize = 10;
+        internal const int DroneSlotCapacity = 10;
+
+        // The legacy depot's grid, so restockers built before 0.7.0 keep their contents.
+        private const int LegacyStorageColumns = 10;
+        private const int LegacyStorageRows = 8;
+
+        // The model is a Planetary Logistics Station shrunk to this size. Belt ports and sorter slots move inward by
+        // whole grid cells (1000 per circumference on a radius-200 planet) so belts still line up with the grid.
+        private const float ModelScale = 0.7f;
+        private const float GridCellLength = 1.2566371f;
 
         // Research cost is copied from Artificial Star, like Battery Sphere Engineering.
         private const int CostReferenceTechnologyId = 1144;
         private const int DepotMk2ItemId = 2102;
+        private const int PlanetaryStationItemId = 2103;
         private const int LogisticsBotItemId = 5003;
         private const int ProcessorItemId = 1303;
 
@@ -58,15 +71,17 @@ namespace SubspaceTransport
                 "Subspace Drones fetch items for Icarus' delivery package from Subspace Restockers anywhere in the cluster.");
             LocalizationModule.RegisterTranslation(
                 TechConclusionKey,
-                "Build Subspace Restockers and stock them with items, Subspace Drones and Subspace Warpers. " +
+                "Build Subspace Restockers, set their item slots and stock them with Subspace Drones and " +
+                "Subspace Warpers. " +
                 "When a delivery package slot falls below its \"at least\" level, a drone tops it up to its " +
                 "\"at most\" level. Each trip uses one Subspace Warper.");
             LocalizationModule.RegisterTranslation(RestockerNameKey, "Subspace Restocker");
             LocalizationModule.RegisterTranslation(
                 RestockerDescriptionKey,
-                "A depot that restocks Icarus' delivery package through subspace from anywhere in the cluster. " +
-                "Its last two slots hold the Subspace Drones that make the trips and the Subspace Warpers they use. " +
-                "Lock other slots to an item to reserve space for it.");
+                "A small logistics station that restocks Icarus' delivery package through subspace from anywhere " +
+                "in the cluster. It has five item slots, a slot for the Subspace Drones that make the trips and a " +
+                "slot for the Subspace Warpers they use, and trades with other stations on its planet like a " +
+                "Planetary Logistics Station.");
             LocalizationModule.RegisterTranslation(RestockerRecipeNameKey, "Subspace Restocker");
             LocalizationModule.RegisterTranslation(DroneNameKey, "Subspace Drone");
             LocalizationModule.RegisterTranslation(
@@ -89,7 +104,7 @@ namespace SubspaceTransport
                 recipe => recipe != null && (recipe.ID == RestockerRecipeId || recipe.ID == DroneRecipeId));
             ModelProto modelConflict = Array.Find(
                 LDB.models.dataArray,
-                model => model != null && model.ID == RestockerModelId);
+                model => model != null && (model.ID == RestockerModelId || model.ID == LegacyDepotModelId));
             string conflict = techConflict != null ? "technology " + techConflict.ID + " (" + techConflict.name + ")"
                 : itemConflict != null ? "item " + itemConflict.ID + " (" + itemConflict.name + ")"
                 : recipeConflict != null ? "recipe " + recipeConflict.ID + " (" + recipeConflict.name + ")"
@@ -105,18 +120,23 @@ namespace SubspaceTransport
             TechProto costReference = LDB.techs.Select(CostReferenceTechnologyId);
             ItemProto depot = LDB.items.Select(DepotMk2ItemId);
             ModelProto depotModel = depot != null ? LDB.models.Select(depot.ModelIndex) : null;
+            ItemProto station = LDB.items.Select(PlanetaryStationItemId);
+            ModelProto stationModel = station != null ? LDB.models.Select(station.ModelIndex) : null;
             if (vanillaResearch == null
                 || costReference?.Items == null
                 || costReference.ItemPoints == null
                 || depotModel == null
+                || stationModel == null
                 || LDB.items.Select(LogisticsBotItemId) == null
                 || LDB.items.Select(ProcessorItemId) == null)
             {
                 throw new InvalidOperationException(
-                    "Could not find the required research, Artificial Star, Depot Mk.II, Logistics Bot or Processor prototype.");
+                    "Could not find the required research, Artificial Star, Depot Mk.II, Planetary Logistics Station, " +
+                    "Logistics Bot or Processor prototype.");
             }
 
-            RegisterRestocker(depot, depotModel);
+            RegisterRestocker(station, stationModel);
+            RegisterLegacyDepotModel(depotModel);
             RegisterDrone();
 
             TechProto technology = new TechProto
@@ -157,7 +177,7 @@ namespace SubspaceTransport
             Logger.LogInfo("Registered the Subspace Restocker, Subspace Drone and Subspace Restocking research.");
         }
 
-        private static void RegisterRestocker(ItemProto depot, ModelProto depotModel)
+        private static void RegisterRestocker(ItemProto station, ModelProto stationModel)
         {
             int gridIndex = Plugin.GetTabGridIndex(3, 1);
             ItemProto restocker = ProtoRegistry.RegisterItem(
@@ -166,36 +186,24 @@ namespace SubspaceTransport
                 RestockerDescriptionKey,
                 IconLoader.SubspaceRestocker,
                 gridIndex,
-                depot.StackSize,
+                station.StackSize,
                 EItemType.Logistics);
 
             ModelProto model = ProtoRegistry.RegisterModel(
                 RestockerModelId,
                 restocker,
-                depotModel.PrefabPath,
+                stationModel.PrefabPath,
                 null,
-                depot.DescFields != null ? (int[])depot.DescFields.Clone() : Array.Empty<int>(),
-                FindFreeBuildIndex(depot.BuildIndex));
+                station.DescFields != null ? (int[])station.DescFields.Clone() : Array.Empty<int>(),
+                FindFreeBuildIndex(station.BuildIndex));
             SubspaceLogisticsTechnology.RequireRegisteredId(model, RestockerModelId);
-
-            // Health, ruins and draw order are proto data rather than prefab data, so they come from the depot.
-            model.ObjectType = depotModel.ObjectType;
-            model.RuinType = depotModel.RuinType;
-            model.RendererType = depotModel.RendererType;
-            model.RotSymmetry = depotModel.RotSymmetry;
-            model.HpMax = depotModel.HpMax;
-            model.HpUpgrade = depotModel.HpUpgrade;
-            model.HpRecover = depotModel.HpRecover;
-            model.RuinId = depotModel.RuinId;
-            model.RuinCount = depotModel.RuinCount;
-            model.RuinLifeTime = depotModel.RuinLifeTime;
-            model.Order = depotModel.Order;
+            CopyModelData(stationModel, model);
 
             ProtoRegistry.RegisterRecipe(
                 RestockerRecipeId,
                 ERecipeType.Assemble,
                 600,
-                new[] { DepotMk2ItemId, ProcessorItemId, SubspaceWarperContent.ItemId },
+                new[] { PlanetaryStationItemId, ProcessorItemId, SubspaceWarperContent.ItemId },
                 new[] { 1, 4, 2 },
                 new[] { RestockerItemId },
                 new[] { 1 },
@@ -204,6 +212,30 @@ namespace SubspaceTransport
                 gridIndex,
                 RestockerRecipeNameKey,
                 IconLoader.SubspaceRestocker);
+        }
+
+        // Not linked to the item, so it is never offered on the build bar; it only renders restockers saved as depots.
+        private static void RegisterLegacyDepotModel(ModelProto depotModel)
+        {
+            ModelProto model = ProtoRegistry.RegisterModel(LegacyDepotModelId, depotModel.PrefabPath);
+            SubspaceLogisticsTechnology.RequireRegisteredId(model, LegacyDepotModelId);
+            CopyModelData(depotModel, model);
+        }
+
+        // Health, ruins and draw order are proto data rather than prefab data, so they come from the vanilla model.
+        private static void CopyModelData(ModelProto source, ModelProto model)
+        {
+            model.ObjectType = source.ObjectType;
+            model.RuinType = source.RuinType;
+            model.RendererType = source.RendererType;
+            model.RotSymmetry = source.RotSymmetry;
+            model.HpMax = source.HpMax;
+            model.HpUpgrade = source.HpUpgrade;
+            model.HpRecover = source.HpRecover;
+            model.RuinId = source.RuinId;
+            model.RuinCount = source.RuinCount;
+            model.RuinLifeTime = source.RuinLifeTime;
+            model.Order = source.Order;
         }
 
         private static void RegisterDrone()
@@ -236,21 +268,38 @@ namespace SubspaceTransport
             recipe.Explicit = true;
         }
 
-        // Runs once the model's prefab has loaded: enlarges its storage and tints it violet. PrefabDesc copies the
-        // prefab's material arrays, so replacing entries here leaves the vanilla depot untouched.
+        // Runs once the models' prefabs have loaded. PrefabDesc copies the prefab's meshes, poses and material
+        // arrays, so changing them here leaves the vanilla station and depot untouched.
         private static void ConfigureModel()
         {
             ModelProto model = LDB.models.Select(RestockerModelId);
             PrefabDesc desc = model != null ? model.prefabDesc : null;
-            if (desc == null || !desc.isStorage)
+            if (desc == null || !desc.isStation || desc.isStellarStation)
             {
-                Logger.LogError("The Subspace Restocker model did not load as a storage building.");
+                Logger.LogError("The Subspace Restocker model did not load as a planetary logistics station.");
+            }
+            else
+            {
+                desc.stationMaxItemKinds = StorageSlots;
+                ScaleModel(model, desc, ModelScale);
+                ApplyTint(desc);
+            }
+
+            ModelProto legacy = LDB.models.Select(LegacyDepotModelId);
+            PrefabDesc legacyDesc = legacy != null ? legacy.prefabDesc : null;
+            if (legacyDesc == null || !legacyDesc.isStorage)
+            {
+                Logger.LogError("The legacy Subspace Restocker depot model did not load as a storage building.");
                 return;
             }
 
-            desc.storageCol = StorageColumns;
-            desc.storageRow = StorageRows;
+            legacyDesc.storageCol = LegacyStorageColumns;
+            legacyDesc.storageRow = LegacyStorageRows;
+            ApplyTint(legacyDesc);
+        }
 
+        private static void ApplyTint(PrefabDesc desc)
+        {
             for (int lod = 0; lod < desc.lodCount; lod++)
             {
                 Material[] materials = desc.lodMaterials?[lod];
@@ -277,10 +326,129 @@ namespace SubspaceTransport
             }
         }
 
-        // The build bar shows one item per index, so the restocker takes the first free slot in the depot's row.
-        private static int FindFreeBuildIndex(int depotBuildIndex)
+        // Shrinks the meshes, their vertex animation, colliders and the points drones, belts and sorters use.
+        private static void ScaleModel(ModelProto model, PrefabDesc desc, float scale)
         {
-            int row = depotBuildIndex / 100 * 100;
+            for (int lod = 0; lod < desc.lodCount; lod++)
+            {
+                Mesh mesh = desc.lodMeshes?[lod];
+                if (mesh != null)
+                {
+                    Vector3[] vertices = mesh.vertices;
+                    for (int i = 0; i < vertices.Length; i++)
+                    {
+                        vertices[i] *= scale;
+                    }
+
+                    Bounds bounds = mesh.bounds;
+                    mesh.vertices = vertices;
+                    mesh.bounds = new Bounds(bounds.center * scale, bounds.size * scale);
+                }
+
+                // Animated parts are drawn from per-frame vertex positions, the first three floats of each vertex.
+                VertaBuffer verta = desc.lodVertas?[lod];
+                if (verta?.data != null && verta.vertexSize >= 3)
+                {
+                    for (int i = 0; i + 2 < verta.data.Length; i += verta.vertexSize)
+                    {
+                        verta.data[i] *= scale;
+                        verta.data[i + 1] *= scale;
+                        verta.data[i + 2] *= scale;
+                    }
+
+                    verta.SetBufferData();
+                }
+            }
+
+            if (desc.lodMeshes != null && desc.lodMeshes.Length > 0 && desc.lodMeshes[0] != null)
+            {
+                model.meshBounds = desc.lodMeshes[0].bounds;
+            }
+
+            ScaleColliders(desc.colliders, scale);
+            ScaleColliders(desc.buildColliders, scale);
+            desc.buildCollider = ScaleCollider(desc.buildCollider, scale);
+
+            if (desc.landPoints != null)
+            {
+                for (int i = 0; i < desc.landPoints.Length; i++)
+                {
+                    desc.landPoints[i] = new Vector3(
+                        desc.landPoints[i].x * scale,
+                        desc.landPoints[i].y,
+                        desc.landPoints[i].z * scale);
+                }
+            }
+
+            MovePosesInward(desc.portPoses, scale);
+            MovePosesInward(desc.slotPoses, scale);
+
+            desc.stationDronePos *= scale;
+            desc.stationShipPos *= scale;
+            desc.powerPoint *= scale;
+            desc.selectCenter *= scale;
+            desc.selectSize *= scale;
+            desc.buildingGizmoCenter *= scale;
+            desc.buildingGizmoExt *= scale;
+            desc.minimapScl *= scale;
+            desc.roughRadius *= scale;
+            desc.roughHeight *= scale;
+            desc.barHeight *= scale;
+            desc.signHeight *= scale;
+            desc.cullingHeight *= scale;
+        }
+
+        private static void ScaleColliders(ColliderData[] colliders, float scale)
+        {
+            if (colliders == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                colliders[i] = ScaleCollider(colliders[i], scale);
+            }
+        }
+
+        private static ColliderData ScaleCollider(ColliderData collider, float scale)
+        {
+            collider.pos *= scale;
+            collider.ext *= scale;
+            collider.radius *= scale;
+            return collider;
+        }
+
+        // Each pose moves toward the centre by the whole number of grid cells nearest to the scaled distance, keeping
+        // its height and its offset from the grid.
+        private static void MovePosesInward(Pose[] poses, float scale)
+        {
+            if (poses == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < poses.Length; i++)
+            {
+                Vector3 position = poses[i].position;
+                poses[i].position = new Vector3(
+                    MoveInward(position.x, scale),
+                    position.y,
+                    MoveInward(position.z, scale));
+            }
+        }
+
+        private static float MoveInward(float coordinate, float scale)
+        {
+            float cells = Mathf.Round(Mathf.Abs(coordinate) * (1f - scale) / GridCellLength);
+            float distance = Mathf.Max(0f, Mathf.Abs(coordinate) - cells * GridCellLength);
+            return Mathf.Sign(coordinate) * distance;
+        }
+
+        // The build bar shows one item per index, so the restocker takes the first free slot in the stations' row.
+        private static int FindFreeBuildIndex(int stationBuildIndex)
+        {
+            int row = stationBuildIndex / 100 * 100;
             for (int column = 1; column <= 10; column++)
             {
                 int candidate = row + column;
@@ -290,7 +458,7 @@ namespace SubspaceTransport
                 }
             }
 
-            Logger.LogWarning("No free build bar slot next to the depots; the Subspace Restocker is not on the build bar.");
+            Logger.LogWarning("No free build bar slot next to the logistics stations; the Subspace Restocker is not on the build bar.");
             return 0;
         }
 

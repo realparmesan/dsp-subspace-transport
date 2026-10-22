@@ -66,7 +66,7 @@ namespace SubspaceTransport
     {
         private static bool Prefix(StationComponent __instance, int itemId, int needIdx, int stack)
         {
-            if (itemId != SubspaceWarperContent.ItemId || !StationSettings.IsWormholeStation(__instance))
+            if (itemId != SubspaceWarperContent.ItemId || !StationSettings.HasSubspaceWarperSlot(__instance))
             {
                 return true;
             }
@@ -183,16 +183,20 @@ namespace SubspaceTransport
             }
 
             StationComponent station = SubspaceWarperSlotLifecycle.GetStation(__instance, stationId);
-            int count = StationSettings.TakeAllSubspaceWarpers(station);
+            GiveBack(player, station, SubspaceWarperContent.ItemId, StationSettings.TakeAllSubspaceWarpers(station));
+            GiveBack(
+                player,
+                station,
+                SubspaceRestockerContent.DroneItemId,
+                StationSettings.TakeSubspaceDrones(station, int.MaxValue));
+        }
+
+        private static void GiveBack(Player player, StationComponent station, int itemId, int count)
+        {
             if (count > 0)
             {
-                int upCount = player.TryAddItemToPackage(
-                    SubspaceWarperContent.ItemId,
-                    count,
-                    0,
-                    true,
-                    station.entityId);
-                UIItemup.Up(SubspaceWarperContent.ItemId, upCount);
+                int upCount = player.TryAddItemToPackage(itemId, count, 0, true, station.entityId);
+                UIItemup.Up(itemId, upCount);
             }
         }
     }
@@ -203,7 +207,22 @@ namespace SubspaceTransport
         private static void Prefix(PlanetTransport __instance, int stationId, float dropRate)
         {
             StationComponent station = SubspaceWarperSlotLifecycle.GetStation(__instance, stationId);
-            int count = StationSettings.TakeAllSubspaceWarpers(station);
+            Drop(
+                __instance,
+                station,
+                SubspaceWarperContent.ItemId,
+                StationSettings.TakeAllSubspaceWarpers(station),
+                dropRate);
+            Drop(
+                __instance,
+                station,
+                SubspaceRestockerContent.DroneItemId,
+                StationSettings.TakeSubspaceDrones(station, int.MaxValue),
+                dropRate);
+        }
+
+        private static void Drop(PlanetTransport transport, StationComponent station, int itemId, int count, float dropRate)
+        {
             TrashSystem trashSystem = GameMain.data != null ? GameMain.data.trashSystem : null;
             if (count <= 0 || trashSystem == null)
             {
@@ -216,12 +235,7 @@ namespace SubspaceTransport
                 rate = 1f;
             }
 
-            trashSystem.AddTrashOnPlanet(
-                SubspaceWarperContent.ItemId,
-                (int)(count * rate),
-                0,
-                station.entityId,
-                __instance.planet);
+            trashSystem.AddTrashOnPlanet(itemId, (int)(count * rate), 0, station.entityId, transport.planet);
         }
     }
 
@@ -230,7 +244,9 @@ namespace SubspaceTransport
     {
         private static void Prefix(PlanetTransport __instance, int stationId)
         {
-            StationSettings.TakeAllSubspaceWarpers(SubspaceWarperSlotLifecycle.GetStation(__instance, stationId));
+            StationComponent station = SubspaceWarperSlotLifecycle.GetStation(__instance, stationId);
+            StationSettings.TakeAllSubspaceWarpers(station);
+            StationSettings.TakeSubspaceDrones(station, int.MaxValue);
         }
     }
 
@@ -239,7 +255,9 @@ namespace SubspaceTransport
     {
         private static void Prefix(PlanetTransport __instance, int id)
         {
-            StationSettings.ForgetStation(SubspaceWarperSlotLifecycle.GetStation(__instance, id));
+            StationComponent station = SubspaceWarperSlotLifecycle.GetStation(__instance, id);
+            StationSettings.ForgetStation(station);
+            SubspaceRestockerManager.OnStationRemoved(station);
         }
     }
 
@@ -267,7 +285,7 @@ namespace SubspaceTransport
 
         internal static bool IsOffered(StationComponent station)
         {
-            return SubspaceLogisticsTechnology.IsUnlocked && StationSettings.IsWormholeStation(station);
+            return SubspaceLogisticsTechnology.IsUnlocked && StationSettings.HasSubspaceWarperSlot(station);
         }
     }
 

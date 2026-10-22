@@ -21,7 +21,7 @@ namespace SubspaceTransport
     {
         public const string PluginGuid = "realparmesan.dsp.subspacetransport";
         public const string PluginName = "Wormhole Logistics";
-        public const string PluginVersion = "0.6.0";
+        public const string PluginVersion = "0.7.0";
 
         private const string TabId = "WormholeLogistics:WormholeLogisticsTab";
 

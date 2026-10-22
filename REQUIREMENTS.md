@@ -21,8 +21,9 @@ that every described feature is already present.
 - Stellar Hyper Mass Inducer (1953), Stellar Hyper Mass Amplification (2970,
   50 levels, on the Upgrades tab; Subspace Efficiency is 2950 there too), the Hyper Mass Rocket (11998) and the Hyper Mass Injector
   project are implemented (2026-10-15). See "Decisions" below.
-- Subspace Restocking (1955), the Subspace Restocker building (item 11995, model 680; More Megastructures uses models 352-357 and 552-562) and the Subspace
-  Drone (11994) are implemented (2026-10-18). See "Subspace Restocking decisions" below.
+- Subspace Restocking (1955), the Subspace Restocker building (item 11995, model 681; More Megastructures uses models 352-357 and 552-562) and the Subspace
+  Drone (11994) are implemented (2026-10-18). See "Subspace Restocking decisions" below. Model 680 is the
+  pre-0.7.0 depot restocker, kept registered so old saves load.
 - Subspace Logistics, Subspace Efficiency and Battery Sphere Engineering each
   have their own technology icon, and their tree nodes no longer overlap.
 
@@ -178,7 +179,16 @@ locking down implementation details:
   "No recycling" makes the request level the target too.
 - One trip uses one Subspace Warper from the source restocker, carries up to 100x the Logistics Bot capacity
   (`SubspaceRestockerManager.CarryMultiplier`), and takes a fixed 5 s (`TripTicks`).
-- Restocker slots 1 and 2 are locked to Subspace Drones (stack 10) and Subspace Warpers (stack 100). They are
-  first so the depot's automation limit, which bans slots from the end, never covers them. All drones and
-  warpers anywhere in the restocker count.
+- (2026-10-23) The restocker is a planetary logistics station built from the Planetary Logistics Station prefab,
+  scaled to 70% (`SubspaceRestockerContent.ModelScale`) and tinted violet. Belt ports and sorter slots move
+  inward by whole grid cells so belts stay on the grid. It has 5 item slots
+  (`SubspaceRestockerContent.StorageSlots`), the most the Control Panel's station list shows (its inspector shows
+  6), and takes part in planetary logistics like a Planetary Logistics Station.
+- Subspace Drones (up to 10) and Subspace Warpers (up to 100) have dedicated slots, stored per station in
+  `StationSettings` (save format 3), shown in the vessel and Space Warper boxes planetary stations leave empty.
+  Only idle drones can be taken out. A trip uses a Subspace Warper from the slot first, then from any item slot
+  holding Subspace Warpers.
+- Planetary stations leave `planetId` at 0, so `SubspaceRestockerManager` keeps a registry of restocker stations
+  and their planet/entity keys, which `StationSettings` uses for their keys.
+- Pre-0.7.0 restockers (depots on model 680) load as plain depots; they must be rebuilt.
 - Item IDs stay below 12000 because `StorageComponent.AddItem` rejects higher IDs.

@@ -11,10 +11,10 @@ namespace SubspaceTransport
     // Icarus holds fewer than the request level (inventory, hand and slot together, like vanilla counts it), an idle
     // drone takes up to the maximum from a restocker and delivers it after a fixed trip. A drone carries 100 times
     // a Logistics Bot's load, and each trip uses one Subspace Warper from the restocker it leaves.
+    //
+    // Restockers are planetary logistics stations. Their drone and Subspace Warper counts live in StationSettings.
     internal static class SubspaceRestockerManager
     {
-        internal const int DroneSlot = 0;
-        internal const int WarperSlot = 1;
         internal const int CarryMultiplier = 100;
         internal const int TripTicks = 300;
 
@@ -36,13 +36,18 @@ namespace SubspaceTransport
         private struct Restocker
         {
             internal PlanetFactory Factory;
-            internal StorageComponent Storage;
+            internal StationComponent Station;
             internal long Key;
         }
 
         private static readonly List<Trip> Trips = new List<Trip>();
         private static readonly List<Restocker> Restockers = new List<Restocker>();
         private static long _lastScanTick = -1;
+
+        // Every restocker station and its key (planet << 32 | entity). Logistics worker threads read it, so it is
+        // replaced rather than changed. Station objects are pooled and reused, so membership is by reference and is
+        // updated whenever a station is created or removed.
+        private static volatile Dictionary<StationComponent, long> _registry = new Dictionary<StationComponent, long>();
 
         internal static void GameTick(Player player, long time)
         {
@@ -53,82 +58,91 @@ namespace SubspaceTransport
 
             AdvanceTrips(player);
             SubspaceDroneAnimation.GameTick();
-            if (time % DispatchIntervalTicks != 0 || !SubspaceRestockerContent.IsUnlocked)
-            {
-                return;
-            }
 
+            // The registry the station patches read is rebuilt here, so a loaded save's restockers work at once.
             if (_lastScanTick < 0 || time - _lastScanTick >= RescanIntervalTicks || time < _lastScanTick)
             {
                 Rescan();
                 _lastScanTick = time;
             }
 
-            Dispatch(player);
+            if (time % DispatchIntervalTicks == 0 && SubspaceRestockerContent.IsUnlocked)
+            {
+                Dispatch(player);
+            }
         }
 
-        internal static bool IsRestocker(PlanetFactory factory, StorageComponent storage)
+        internal static bool IsRestocker(StationComponent station)
+        {
+            return station != null && _registry.ContainsKey(station);
+        }
+
+        internal static bool TryGetKey(StationComponent station, out long key)
+        {
+            key = 0;
+            return station != null && _registry.TryGetValue(station, out key);
+        }
+
+        private static bool IsRestockerEntity(PlanetFactory factory, StationComponent station)
         {
             return factory?.entityPool != null
-                && storage != null
-                && storage.id > 0
-                && storage.entityId > 0
-                && storage.entityId < factory.entityPool.Length
-                && factory.entityPool[storage.entityId].protoId == SubspaceRestockerContent.RestockerItemId;
+                && station != null
+                && station.id > 0
+                && station.entityId > 0
+                && station.entityId < factory.entityPool.Length
+                && factory.entityPool[station.entityId].stationId == station.id
+                && factory.entityPool[station.entityId].protoId == SubspaceRestockerContent.RestockerItemId;
         }
 
-        // The first two slots are locked to Subspace Drones and Subspace Warpers. They come first so that the
-        // depot's automation limit, which bans slots from the end, never covers them.
-        internal static void EnsureReservedSlots(StorageComponent storage)
+        // A recycled station object may have been a restocker, so every new station is checked.
+        internal static void OnStationCreated(PlanetTransport transport, StationComponent station)
         {
-            if (storage?.grids == null || storage.size <= WarperSlot)
+            PlanetFactory factory = transport?.factory;
+            if (station == null || factory == null)
             {
                 return;
             }
 
-            if (storage.type <= EStorageType.Default)
-            {
-                storage.type = EStorageType.Filtered;
-            }
-
-            Reserve(storage, DroneSlot, SubspaceRestockerContent.DroneItemId);
-            Reserve(storage, WarperSlot, SubspaceWarperContent.ItemId);
-        }
-
-        private static void Reserve(StorageComponent storage, int slot, int itemId)
-        {
-            StorageComponent.GRID grid = storage.grids[slot];
-            if (grid.filter == itemId)
+            bool restocker = IsRestockerEntity(factory, station);
+            if (restocker == IsRestocker(station))
             {
                 return;
             }
 
-            // A slot already holding something else is reserved once it empties.
-            if (grid.count <= 0 || grid.itemId == itemId)
+            Dictionary<StationComponent, long> registry = new Dictionary<StationComponent, long>(_registry);
+            if (restocker)
             {
-                storage.SetFilter(slot, itemId);
-                storage.NotifyStorageChange();
-            }
-        }
-
-        // A new restocker is reserved and picked up at once rather than at the next scan.
-        internal static void OnStorageCreated(FactoryStorage factoryStorage, StorageComponent storage)
-        {
-            if (IsRestocker(factoryStorage?.factory, storage))
-            {
-                EnsureReservedSlots(storage);
+                registry[station] = GetKey(factory, station);
                 _lastScanTick = -1;
             }
+            else
+            {
+                registry.Remove(station);
+            }
+
+            _registry = registry;
         }
 
-        internal static int CountBusyDrones(PlanetFactory factory, StorageComponent storage)
+        internal static void OnStationRemoved(StationComponent station)
         {
-            if (factory == null || storage == null)
+            if (!IsRestocker(station))
+            {
+                return;
+            }
+
+            Dictionary<StationComponent, long> registry = new Dictionary<StationComponent, long>(_registry);
+            registry.Remove(station);
+            _registry = registry;
+        }
+
+        internal static int CountBusyDrones(StationComponent station)
+        {
+            long key;
+            if (!TryGetKey(station, out key))
             {
                 return 0;
             }
 
-            long key = GetKey(factory, storage);
             int busy = 0;
             foreach (Trip trip in Trips)
             {
@@ -151,42 +165,42 @@ namespace SubspaceTransport
             }
         }
 
+        // Also rebuilds the registry, which is how restockers loaded from a save are found.
         private static void Rescan()
         {
             Restockers.Clear();
+            Dictionary<StationComponent, long> registry = new Dictionary<StationComponent, long>();
             GameData data = GameMain.data;
-            if (data?.factories == null)
-            {
-                return;
-            }
-
-            for (int f = 0; f < data.factoryCount && f < data.factories.Length; f++)
+            for (int f = 0; data?.factories != null && f < data.factoryCount && f < data.factories.Length; f++)
             {
                 PlanetFactory factory = data.factories[f];
-                StorageComponent[] pool = factory?.factoryStorage?.storagePool;
+                StationComponent[] pool = factory?.transport?.stationPool;
                 if (pool == null || factory.planet == null)
                 {
                     continue;
                 }
 
-                int cursor = Math.Min(factory.factoryStorage.storageCursor, pool.Length);
+                int cursor = Math.Min(factory.transport.stationCursor, pool.Length);
                 for (int i = 1; i < cursor; i++)
                 {
-                    StorageComponent storage = pool[i];
-                    if (storage == null || storage.id != i || !IsRestocker(factory, storage))
+                    StationComponent station = pool[i];
+                    if (station == null || station.id != i || !IsRestockerEntity(factory, station))
                     {
                         continue;
                     }
 
-                    EnsureReservedSlots(storage);
+                    long key = GetKey(factory, station);
+                    registry[station] = key;
                     Restockers.Add(new Restocker
                     {
                         Factory = factory,
-                        Storage = storage,
-                        Key = GetKey(factory, storage)
+                        Station = station,
+                        Key = key
                     });
                 }
             }
+
+            _registry = registry;
         }
 
         private static void Dispatch(Player player)
@@ -238,17 +252,16 @@ namespace SubspaceTransport
                     }
 
                     int amount = (int)Math.Min(Math.Min(need, carry), stock);
-                    int warperInc;
-                    if (source.Storage.TakeItem(SubspaceWarperContent.ItemId, 1, out warperInc) != 1)
+                    if (!TryConsumeWarper(source.Station))
                     {
                         break;
                     }
 
                     int inc;
-                    int taken = source.Storage.TakeItem(itemId, amount, out inc);
+                    int taken = TakeItem(source.Station, itemId, amount, out inc);
                     if (taken <= 0)
                     {
-                        source.Storage.AddItem(SubspaceWarperContent.ItemId, 1, warperInc, out _);
+                        StationSettings.AddSubspaceWarpers(source.Station, 1);
                         break;
                     }
 
@@ -261,7 +274,7 @@ namespace SubspaceTransport
                         GridIndex = index,
                         RemainingTicks = TripTicks
                     });
-                    SubspaceDroneAnimation.Depart(source.Factory, source.Storage.entityId, itemId, taken);
+                    SubspaceDroneAnimation.Depart(source.Factory, source.Station.entityId, itemId, taken);
                     need -= taken;
                 }
             }
@@ -276,19 +289,18 @@ namespace SubspaceTransport
             for (int i = Restockers.Count - 1; i >= 0; i--)
             {
                 Restocker restocker = Restockers[i];
-                StorageComponent storage = restocker.Storage;
-                if (!IsRestocker(restocker.Factory, storage)
-                    || restocker.Factory.factoryStorage.storagePool[storage.id] != storage)
+                StationComponent station = restocker.Station;
+                if (!IsRestocker(station) || !IsRestockerEntity(restocker.Factory, station))
                 {
                     Restockers.RemoveAt(i);
                     continue;
                 }
 
-                int stock = storage.GetItemCount(itemId);
+                int stock = CountItem(station, itemId);
                 if (stock <= bestStock
-                    || storage.GetItemCount(SubspaceWarperContent.ItemId) <= 0
-                    || storage.GetItemCount(SubspaceRestockerContent.DroneItemId)
-                        <= CountBusyDrones(restocker.Factory, storage))
+                    || (StationSettings.GetSubspaceWarperCount(station) <= 0
+                        && CountItem(station, SubspaceWarperContent.ItemId) <= 0)
+                    || StationSettings.GetSubspaceDroneCount(station) <= CountBusyDrones(station))
                 {
                     continue;
                 }
@@ -298,6 +310,63 @@ namespace SubspaceTransport
             }
 
             return bestStock > 0;
+        }
+
+        private static int CountItem(StationComponent station, int itemId)
+        {
+            StationStore[] storage = station.storage;
+            long count = 0;
+            lock (storage)
+            {
+                for (int i = 0; i < storage.Length; i++)
+                {
+                    if (storage[i].itemId == itemId && storage[i].count > 0)
+                    {
+                        count += storage[i].count;
+                    }
+                }
+            }
+
+            return (int)Math.Min(int.MaxValue, count);
+        }
+
+        // Takes from every slot holding the item, splitting proliferator points like vanilla.
+        private static int TakeItem(StationComponent station, int itemId, int count, out int inc)
+        {
+            StationStore[] storage = station.storage;
+            int taken = 0;
+            inc = 0;
+            lock (storage)
+            {
+                for (int i = 0; i < storage.Length && taken < count; i++)
+                {
+                    if (storage[i].itemId != itemId || storage[i].count <= 0)
+                    {
+                        continue;
+                    }
+
+                    int amount = Math.Min(count - taken, storage[i].count);
+                    int slotInc = storage[i].inc / storage[i].count * amount;
+                    storage[i].count -= amount;
+                    storage[i].inc -= slotInc;
+                    taken += amount;
+                    inc += slotInc;
+                }
+            }
+
+            return taken;
+        }
+
+        // The Subspace Warper slot first, then any item slot holding Subspace Warpers.
+        private static bool TryConsumeWarper(StationComponent station)
+        {
+            if (StationSettings.TryConsumeSubspaceWarper(station))
+            {
+                return true;
+            }
+
+            int inc;
+            return TakeItem(station, SubspaceWarperContent.ItemId, 1, out inc) == 1;
         }
 
         private static long GetFreeSpace(Player player, DeliveryPackage.GRID grid, int itemId)
@@ -361,7 +430,7 @@ namespace SubspaceTransport
         }
 
         // The delivery package slot fills first and the inventory takes the rest. Anything that still doesn't fit
-        // goes back to the restocker, or is dropped beside Icarus if the restocker is gone or full.
+        // goes back to the restocker, or is dropped beside Icarus if the restocker is gone or no longer has a slot for it.
         private static void Deliver(Player player, Trip trip)
         {
             int gridIndex = trip.GridIndex >= 0 && trip.GridIndex < DeliveryPackage.MAX_COUNT ? trip.GridIndex : 0;
@@ -379,11 +448,10 @@ namespace SubspaceTransport
                 return;
             }
 
-            StorageComponent storage = FindRestocker(trip.RestockerKey);
-            if (storage != null)
+            StationComponent station = FindRestocker(trip.RestockerKey);
+            if (station != null && station.AddItem(trip.ItemId, left, remainInc) > 0)
             {
-                int returned = storage.AddItem(trip.ItemId, left, remainInc, out remainInc);
-                left -= returned;
+                return;
             }
 
             if (left > 0)
@@ -392,7 +460,7 @@ namespace SubspaceTransport
             }
         }
 
-        private static StorageComponent FindRestocker(long key)
+        private static StationComponent FindRestocker(long key)
         {
             int planetId = (int)(key >> 32);
             int entityId = (int)(uint)key;
@@ -402,15 +470,15 @@ namespace SubspaceTransport
                 return null;
             }
 
-            int storageId = factory.entityPool[entityId].storageId;
-            StorageComponent[] pool = factory.factoryStorage?.storagePool;
-            StorageComponent storage = pool != null && storageId > 0 && storageId < pool.Length ? pool[storageId] : null;
-            return IsRestocker(factory, storage) && storage.entityId == entityId ? storage : null;
+            int stationId = factory.entityPool[entityId].stationId;
+            StationComponent[] pool = factory.transport?.stationPool;
+            StationComponent station = pool != null && stationId > 0 && stationId < pool.Length ? pool[stationId] : null;
+            return IsRestockerEntity(factory, station) && station.entityId == entityId ? station : null;
         }
 
-        private static long GetKey(PlanetFactory factory, StorageComponent storage)
+        private static long GetKey(PlanetFactory factory, StationComponent station)
         {
-            return ((long)factory.planetId << 32) | (uint)storage.entityId;
+            return ((long)factory.planetId << 32) | (uint)station.entityId;
         }
 
         internal static void Export(BinaryWriter writer)
@@ -470,17 +538,18 @@ namespace SubspaceTransport
         {
             Trips.Clear();
             Restockers.Clear();
+            _registry = new Dictionary<StationComponent, long>();
             SubspaceDroneAnimation.Reset();
             _lastScanTick = -1;
         }
     }
 
-    [HarmonyPatch(typeof(FactoryStorage), nameof(FactoryStorage.NewStorageComponent))]
+    [HarmonyPatch(typeof(PlanetTransport), nameof(PlanetTransport.NewStationComponent))]
     internal static class SubspaceRestockerBuildPatch
     {
-        private static void Postfix(FactoryStorage __instance, StorageComponent __result)
+        private static void Postfix(PlanetTransport __instance, StationComponent __result)
         {
-            SubspaceRestockerManager.OnStorageCreated(__instance, __result);
+            SubspaceRestockerManager.OnStationCreated(__instance, __result);
         }
     }
 
