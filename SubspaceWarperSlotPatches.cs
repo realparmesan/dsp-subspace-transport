@@ -11,6 +11,11 @@ namespace SubspaceTransport
     {
         private static void Postfix(StationComponent __instance)
         {
+            Refill(__instance);
+        }
+
+        internal static void Refill(StationComponent __instance)
+        {
             StationStore[] storage = __instance.storage;
             if (storage == null || !StationSettings.HasSubspaceWarperSpace(__instance))
             {
@@ -33,6 +38,17 @@ namespace SubspaceTransport
                     return;
                 }
             }
+        }
+    }
+
+    // Planetary stations such as the Subspace Restocker tick through InternalTickLocal, so their item slots feed the
+    // Subspace Warper slot (and the belts and trips that draw on it) the same way.
+    [HarmonyPatch(typeof(StationComponent), "InternalTickLocal")]
+    internal static class SubspaceWarperLocalStorageRefillPatch
+    {
+        private static void Postfix(StationComponent __instance)
+        {
+            SubspaceWarperStorageRefillPatch.Refill(__instance);
         }
     }
 
