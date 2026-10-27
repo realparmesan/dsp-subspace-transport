@@ -42,6 +42,7 @@ namespace SubspaceTransport
             BatterySphereContent.Logger = Logger;
             HyperMassContent.Logger = Logger;
             SubspaceRestockerContent.Logger = Logger;
+            AdvancedEnergyExchangerContent.Logger = Logger;
             TabPage = TabSystem.RegisterTab(
                 TabId,
                 new TabData("Subspace", IconLoader.WormholeLogisticsTech));
@@ -51,17 +52,20 @@ namespace SubspaceTransport
             BatterySphereContent.RegisterTranslations();
             HyperMassContent.RegisterTranslations();
             SubspaceRestockerContent.RegisterTranslations();
+            AdvancedEnergyExchangerContent.RegisterTranslations();
             LDBTool.PreAddDataAction += SubspaceLogisticsTechnology.Register;
             LDBTool.PreAddDataAction += WormholeEfficiencyTechnology.Register;
             LDBTool.PreAddDataAction += SubspaceWarperContent.Register;
             LDBTool.PreAddDataAction += BatterySphereContent.Register;
             LDBTool.PreAddDataAction += HyperMassContent.Register;
             LDBTool.PreAddDataAction += SubspaceRestockerContent.Register;
+            LDBTool.PreAddDataAction += AdvancedEnergyExchangerContent.Register;
             LDBTool.PostAddDataAction += SubspaceLogisticsTechnology.LinkTechnologyTree;
             LDBTool.PostAddDataAction += WormholeEfficiencyTechnology.LinkTechnologyTree;
             LDBTool.PostAddDataAction += BatterySphereContent.LinkTechnologyTree;
             LDBTool.PostAddDataAction += HyperMassContent.LinkTechnologyTree;
             LDBTool.PostAddDataAction += SubspaceRestockerContent.LinkTechnologyTree;
+            LDBTool.PostAddDataAction += AdvancedEnergyExchangerContent.LinkTechnologyTree;
 
             _harmony = new Harmony(PluginGuid);
             _harmony.PatchAll();
@@ -77,11 +81,13 @@ namespace SubspaceTransport
             LDBTool.PreAddDataAction -= BatterySphereContent.Register;
             LDBTool.PreAddDataAction -= HyperMassContent.Register;
             LDBTool.PreAddDataAction -= SubspaceRestockerContent.Register;
+            LDBTool.PreAddDataAction -= AdvancedEnergyExchangerContent.Register;
             LDBTool.PostAddDataAction -= SubspaceLogisticsTechnology.LinkTechnologyTree;
             LDBTool.PostAddDataAction -= WormholeEfficiencyTechnology.LinkTechnologyTree;
             LDBTool.PostAddDataAction -= BatterySphereContent.LinkTechnologyTree;
             LDBTool.PostAddDataAction -= HyperMassContent.LinkTechnologyTree;
             LDBTool.PostAddDataAction -= SubspaceRestockerContent.LinkTechnologyTree;
+            LDBTool.PostAddDataAction -= AdvancedEnergyExchangerContent.LinkTechnologyTree;
             _harmony?.UnpatchSelf();
             if (Log == this)
             {

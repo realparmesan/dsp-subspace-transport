@@ -22,6 +22,8 @@ namespace SubspaceTransport
         internal const string SubspaceRestockingTech = PathPrefix + "subspace_restocking_tech";
         internal const string SubspaceRestocker = PathPrefix + "subspace_restocker";
         internal const string SubspaceDrone = PathPrefix + "subspace_drone";
+        internal const string AdvancedEnergyExchanger = PathPrefix + "advanced_energy_exchanger";
+        internal const string AdvancedEnergyExchangerTech = PathPrefix + "advanced_energy_exchanger_tech";
 
         private static readonly Dictionary<string, Sprite> Sprites = new Dictionary<string, Sprite>();
 

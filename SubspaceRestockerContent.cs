@@ -462,7 +462,7 @@ namespace SubspaceTransport
             return 0;
         }
 
-        // Battery Sphere Engineering sits 8 columns right of Interstellar Logistics System; this tech goes in a
+        // Advanced Energy Engineering sits 8 columns right of Interstellar Logistics System; this tech goes in a
         // free cell beside it, so both branch off Subspace Logistics in parallel.
         private static Vector2 FindFreePosition(Vector2 interstellarLogistics)
         {
@@ -474,6 +474,7 @@ namespace SubspaceTransport
                     // This mod's other main-tab techs are still pending in LDBTool.
                     interstellarLogistics + new Vector2(4f, 0f),
                     interstellarLogistics + new Vector2(8f, 0f),
+                    BatterySphereContent.TechnologyPosition,
                     HyperMassContent.InducerPosition
                 })
                 .ToArray();

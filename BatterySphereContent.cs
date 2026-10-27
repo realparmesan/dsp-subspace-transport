@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using BepInEx.Logging;
 using CommonAPI.Systems;
 using CommonAPI.Systems.ModLocalization;
@@ -27,6 +28,8 @@ namespace SubspaceTransport
         private const string TechConclusionKey = "SubspaceTransport_BatterySphereEngineeringTechConclusion";
 
         internal static ManualLogSource Logger;
+
+        internal static Vector2 TechnologyPosition { get; private set; }
 
         // Must run from Awake; see SubspaceWarperContent.RegisterTranslations.
         internal static void RegisterTranslations()
@@ -113,6 +116,7 @@ namespace SubspaceTransport
                 RecipeNameKey,
                 IconLoader.BatteryRocket);
 
+            TechnologyPosition = FindFreePosition(vanillaResearch.Position);
             TechProto technology = new TechProto
             {
                 ID = TechnologyId,
@@ -123,8 +127,8 @@ namespace SubspaceTransport
                 IconTag = vanillaResearch.IconTag,
                 IsHiddenTech = false,
                 PreItem = Array.Empty<int>(),
-                Position = vanillaResearch.Position + new Vector2(8f, 0f),
-                PreTechs = new[] { SubspaceLogisticsTechnology.TechnologyId },
+                Position = TechnologyPosition,
+                PreTechs = new[] { AdvancedEnergyExchangerContent.TechnologyId },
                 PreTechsImplicit = Array.Empty<int>(),
                 Items = (int[])costReference.Items.Clone(),
                 ItemPoints = (int[])costReference.ItemPoints.Clone(),
@@ -148,6 +152,35 @@ namespace SubspaceTransport
             LDBTool.PreAddProto(technology);
             SubspaceLogisticsTechnology.RequireRegisteredId(technology, TechnologyId);
             Logger.LogInfo("Registered the Battery Rocket, recipe, and technology.");
+        }
+
+        // Advanced Energy Engineering sits 8 columns right of Interstellar Logistics System; this tech goes 4
+        // columns further right in the same row.
+        private static Vector2 FindFreePosition(Vector2 interstellarLogistics)
+        {
+            Vector2[] occupied = LDB.techs.dataArray
+                .Where(proto => proto != null && proto.page == 0)
+                .Select(proto => proto.Position)
+                .ToArray();
+            Vector2[] offsets =
+            {
+                new Vector2(12f, 0f),
+                new Vector2(12f, 4f),
+                new Vector2(12f, -4f),
+                new Vector2(16f, 0f)
+            };
+
+            foreach (Vector2 offset in offsets)
+            {
+                Vector2 candidate = interstellarLogistics + offset;
+                if (!occupied.Any(position => (position - candidate).sqrMagnitude < 4f))
+                {
+                    return candidate;
+                }
+            }
+
+            Logger.LogWarning("No free technology tree cell found for Battery Sphere Engineering; nodes may overlap.");
+            return interstellarLogistics + offsets[0];
         }
 
         internal static void LinkTechnologyTree()

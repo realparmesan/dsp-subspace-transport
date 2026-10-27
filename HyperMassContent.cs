@@ -276,9 +276,10 @@ namespace SubspaceTransport
                 .ToList();
 
             // This mod's other main-tab techs are still pending in LDBTool and not in LDB.techs yet: Subspace
-            // Logistics and Battery Sphere Engineering.
+            // Logistics, Advanced Energy Engineering and Battery Sphere Engineering.
             occupied.Add(interstellarLogistics + new Vector2(4f, 0f));
             occupied.Add(interstellarLogistics + new Vector2(8f, 0f));
+            occupied.Add(BatterySphereContent.TechnologyPosition);
             occupied.Add(origin);
 
             foreach (Vector2 offset in offsets)
