@@ -305,7 +305,7 @@ namespace SubspaceTransport
                             continue;
                         }
 
-                        long energyCost = station.CalcTripEnergyCost(0.0, shipWarpSpeed, true);
+                        long energyCost = WormholeEnergy.Multiply(station.CalcTripEnergyCost(0.0, shipWarpSpeed, true));
                         if (transferCount <= 0
                             || station.energy < energyCost
                             || !StationSettings.TryConsumeSubspaceWarper(station))
@@ -391,7 +391,7 @@ namespace SubspaceTransport
                         }
 
                         int transferCount = Math.Min(GetMaximumTransfer(), demandCount);
-                        long energyCost = station.CalcTripEnergyCost(0.0, shipWarpSpeed, true);
+                        long energyCost = WormholeEnergy.Multiply(station.CalcTripEnergyCost(0.0, shipWarpSpeed, true));
                         if (transferCount <= 0
                             || station.energy < energyCost
                             || !StationSettings.TryConsumeSubspaceWarper(station))

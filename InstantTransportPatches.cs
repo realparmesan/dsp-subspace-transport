@@ -136,6 +136,7 @@ namespace SubspaceTransport
                 pair.demandIndex,
                 storagePairSupplyItemId,
                 carryCnt,
+                __instance,
                 consumeRegister);
 
             return false;
@@ -175,29 +176,64 @@ namespace SubspaceTransport
                 pair.demandIndex,
                 itemId,
                 shipCarries,
+                __instance,
                 consumeRegister);
 
             return false;
         }
     }
 
+    // DetermineDispatch prices a trip before it knows whether the pair goes by wormhole or by vessel, so the cost is
+    // left at vanilla here and only recorded. A wormhole transfer charges the Subspace Efficiency surcharge itself;
+    // a vessel trip from an enabled station to a partner without Subspace Transport pays the vanilla cost.
     [HarmonyPatch(typeof(StationComponent), "CalcTripEnergyCost")]
     internal static class CalcTripEnergyCostPatch
     {
-        private static void Postfix(StationComponent __instance, ref long __result)
+        private static void Postfix(StationComponent __instance, long __result)
         {
-            if (!SubspaceLogisticsTechnology.IsUnlocked || !StationSettings.IsEnabled(__instance))
+            WormholeEnergy.RecordTripCost(__instance, __result);
+        }
+    }
+
+    internal static class WormholeEnergy
+    {
+        [ThreadStatic]
+        private static StationComponent _lastTripStation;
+
+        [ThreadStatic]
+        private static long _lastTripCost;
+
+        internal static void RecordTripCost(StationComponent station, long cost)
+        {
+            _lastTripStation = station;
+            _lastTripCost = cost;
+        }
+
+        // The trip cost DetermineDispatch just computed for this station, which vanilla deducts once the dispatch
+        // succeeds.
+        internal static long GetTripCost(StationComponent station)
+        {
+            return ReferenceEquals(_lastTripStation, station) ? _lastTripCost : 0;
+        }
+
+        // What a wormhole transfer costs on top of that trip cost.
+        internal static long GetSurcharge(StationComponent station)
+        {
+            long tripCost = GetTripCost(station);
+            return Multiply(tripCost) - tripCost;
+        }
+
+        internal static long Multiply(long cost)
+        {
+            int multiplier = WormholeEfficiencyTechnology.EnergyMultiplier;
+            if (multiplier <= 1)
             {
-                return;
+                return cost;
             }
 
-            int multiplier = WormholeEfficiencyTechnology.EnergyMultiplier;
-            if (multiplier > 1)
-            {
-                __result = __result > long.MaxValue / multiplier
-                    ? long.MaxValue
-                    : __result * multiplier;
-            }
+            return cost > long.MaxValue / multiplier
+                ? long.MaxValue
+                : cost * multiplier;
         }
     }
 
@@ -210,6 +246,7 @@ namespace SubspaceTransport
             int destinationIndex,
             int itemId,
             int maximumCount,
+            StationComponent dispatcher,
             int[] consumeRegister)
         {
             if (source.storage == null
@@ -244,15 +281,23 @@ namespace SubspaceTransport
                         return false;
                     }
 
+                    // A transfer only moves full loads: a vessel load, or the supplying slot's whole max if that is
+                    // smaller. It carries the load whenever the demand slot wants any items, even if that takes it
+                    // past its max. Vessels are paced by their trip time but a wormhole is not, so smaller batches
+                    // would spend a Subspace Warper every time the supplier gained or the demander used a few items.
+                    int fullLoad = Math.Max(1, Math.Min(GetFullLoad(maximumCount), sourceStore.max));
                     int sourceAvailable = Math.Min(sourceStore.count, sourceStore.remoteSupplyCount);
-                    int destinationDemand = Math.Min(
-                        destinationStore.remoteDemandCount,
-                        destinationStore.max - destinationStore.count);
-                    transferredCount = Math.Min(
-                        maximumCount,
-                        Math.Min(sourceAvailable, destinationDemand));
+                    if (sourceAvailable < fullLoad || destinationStore.remoteDemandCount <= 0)
+                    {
+                        return false;
+                    }
 
-                    if (transferredCount <= 0)
+                    transferredCount = fullLoad;
+
+                    // Vanilla has checked the dispatcher holds the trip cost and deducts it after a successful
+                    // dispatch; the surcharge must fit on top of that.
+                    long surcharge = WormholeEnergy.GetSurcharge(dispatcher);
+                    if (dispatcher.energy - surcharge < WormholeEnergy.GetTripCost(dispatcher))
                     {
                         return false;
                     }
@@ -281,6 +326,7 @@ namespace SubspaceTransport
 
                     source.storage[sourceIndex] = sourceStore;
                     destination.storage[destinationIndex] = destinationStore;
+                    dispatcher.energy -= surcharge;
                     if (consumeRegister != null && consumeRegister.Length > SubspaceWarperContent.ItemId)
                     {
                         lock (consumeRegister)
@@ -341,6 +387,14 @@ namespace SubspaceTransport
             }
 
             return true;
+        }
+
+        // DispatchSupplyShip's carry count is already cut to the supplier's stock, so the vessel capacity comes from
+        // the research state.
+        private static int GetFullLoad(int maximumCount)
+        {
+            int carries = GameMain.history != null ? GameMain.history.logisticShipCarries : 0;
+            return carries > 0 ? carries : maximumCount;
         }
 
         internal static bool HasSubspaceWarper(StationComponent station)
