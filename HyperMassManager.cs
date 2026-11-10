@@ -15,9 +15,9 @@ namespace SubspaceTransport
     // the conversion is stored here and reapplied after loading.
     internal static class HyperMassManager
     {
-        internal const long ActivationWatts = 10000000000L;
+        internal const long ActivationWatts = 1000000L;
 
-        private const int SaveFormatVersion = 1;
+        private const int SaveFormatVersion = 2;
         private const int MaximumSavedStars = 10000;
         private const long TicksPerSecond = 60;
 
@@ -27,6 +27,9 @@ namespace SubspaceTransport
 
             // The luminosity the star was hyperinjected to, or 0 if it hasn't been.
             internal float InjectedLuminosity;
+
+            // What the star becomes: a hypergiant, or a black hole.
+            internal bool BlackHole;
         }
 
         private static readonly object Sync = new object();
@@ -47,6 +50,33 @@ namespace SubspaceTransport
             {
                 StarProject project;
                 return Projects.TryGetValue(starIndex, out project) ? project.InjectedLuminosity : 0f;
+            }
+        }
+
+        internal static bool IsBlackHoleTarget(int starIndex)
+        {
+            lock (Sync)
+            {
+                StarProject project;
+                return Projects.TryGetValue(starIndex, out project) && project.BlackHole;
+            }
+        }
+
+        // The choice is fixed once the star has been hyperinjected.
+        internal static bool CanChooseTarget(int starIndex)
+        {
+            return IsPlanned(starIndex) && GetInjectedLuminosity(starIndex) <= 0f;
+        }
+
+        internal static void SetBlackHoleTarget(int starIndex, bool blackHole)
+        {
+            lock (Sync)
+            {
+                StarProject project;
+                if (Projects.TryGetValue(starIndex, out project) && project.InjectedLuminosity <= 0f)
+                {
+                    project.BlackHole = blackHole;
+                }
             }
         }
 
@@ -145,9 +175,11 @@ namespace SubspaceTransport
             }
 
             float target = HyperMassContent.TargetLuminosity;
+            bool blackHole;
             lock (Sync)
             {
                 Projects[star.index].InjectedLuminosity = target;
+                blackHole = Projects[star.index].BlackHole;
             }
 
             // The injector sphere is consumed by the conversion. The star is converted with no sphere around it, so
@@ -155,20 +187,32 @@ namespace SubspaceTransport
             // The conversion lands at the animation's core flash; the saved project already records it, so a save
             // made before then converts the star on load.
             DestroySphere(star.index);
-            StarInjectionAnimation.Begin(star, () => Convert(star, target));
+            StarInjectionAnimation.Begin(star, () => Convert(star, target, blackHole));
         }
 
-        private static void Convert(StarData star, float target)
+        private static void Convert(StarData star, float target, bool blackHole)
         {
-            StarConversion.Apply(star, target);
+            // A sphere created since the injection began (opening the Dyson editor makes one, with a default swarm
+            // orbit) would cap the star's growth, so it goes too before the star is converted.
+            DestroySphere(star.index);
+            StarConversion.Apply(star, target, blackHole);
             DysonSphere replacement = GameMain.data.CreateDysonSphere(star.index);
             if (replacement != null)
             {
                 StarConversion.UpdateSphere(star);
+
+                // An editor showing this star was left holding no sphere; it takes the replacement.
+                UIDysonEditor editor = GetEditor();
+                if (editor?.selection != null && editor.selection.viewStar == star)
+                {
+                    editor.selection.viewDysonSphere = replacement;
+                    StarConversion.RefreshEditor(star);
+                }
             }
 
             Plugin.ModLogger.LogInfo(
-                "Hyperinjected " + star.displayName + " to " + star.dysonLumino.ToString("0.000") + " L.");
+                "Hyperinjected " + star.displayName + " into a " + (blackHole ? "black hole" : "hypergiant") +
+                " at " + star.dysonLumino.ToString("0.000") + " L.");
         }
 
         // Reapplies every saved conversion to the freshly generated galaxy.
@@ -180,24 +224,24 @@ namespace SubspaceTransport
                 return;
             }
 
-            List<KeyValuePair<int, float>> conversions = new List<KeyValuePair<int, float>>();
+            List<KeyValuePair<int, StarProject>> conversions = new List<KeyValuePair<int, StarProject>>();
             lock (Sync)
             {
                 foreach (KeyValuePair<int, StarProject> entry in Projects)
                 {
                     if (entry.Value.InjectedLuminosity > 0f && entry.Key < galaxy.starCount)
                     {
-                        conversions.Add(new KeyValuePair<int, float>(entry.Key, entry.Value.InjectedLuminosity));
+                        conversions.Add(entry);
                     }
                 }
             }
 
-            foreach (KeyValuePair<int, float> conversion in conversions)
+            foreach (KeyValuePair<int, StarProject> conversion in conversions)
             {
                 StarData star = galaxy.stars[conversion.Key];
                 if (star != null && StarConversion.CanConvert(star))
                 {
-                    StarConversion.Apply(star, conversion.Value);
+                    StarConversion.Apply(star, conversion.Value.InjectedLuminosity, conversion.Value.BlackHole);
                 }
             }
         }
@@ -213,6 +257,7 @@ namespace SubspaceTransport
                     writer.Write(entry.Key);
                     writer.Write(entry.Value.Planned);
                     writer.Write(entry.Value.InjectedLuminosity);
+                    writer.Write(entry.Value.BlackHole);
                 }
             }
         }
@@ -220,7 +265,7 @@ namespace SubspaceTransport
         internal static void Import(BinaryReader reader)
         {
             int version = reader.ReadInt32();
-            if (version != SaveFormatVersion)
+            if (version < 1 || version > SaveFormatVersion)
             {
                 throw new InvalidDataException("Unsupported Hyper Mass Injector save format: " + version + ".");
             }
@@ -237,6 +282,7 @@ namespace SubspaceTransport
                 int starIndex = reader.ReadInt32();
                 bool planned = reader.ReadBoolean();
                 float luminosity = reader.ReadSingle();
+                bool blackHole = version >= 2 && reader.ReadBoolean();
                 if (starIndex < 0
                     || float.IsNaN(luminosity)
                     || luminosity < 0f
@@ -245,7 +291,7 @@ namespace SubspaceTransport
                     throw new InvalidDataException("Invalid Hyper Mass Injector project data.");
                 }
 
-                loadedProjects[starIndex] = new StarProject { Planned = planned, InjectedLuminosity = luminosity };
+                loadedProjects[starIndex] = new StarProject { Planned = planned, InjectedLuminosity = luminosity, BlackHole = blackHole };
             }
 
             lock (Sync)
@@ -276,8 +322,20 @@ namespace SubspaceTransport
                 return;
             }
 
+            // The Dyson editor draws the sphere it holds every frame, so it must let go of a freed one.
+            UIDysonEditor editor = GetEditor();
+            if (editor?.selection != null && editor.selection.viewDysonSphere == sphere)
+            {
+                editor.selection.viewDysonSphere = null;
+            }
+
             GameMain.data.dysonSpheres[starIndex] = null;
             sphere.Free();
+        }
+
+        private static UIDysonEditor GetEditor()
+        {
+            return UIRoot.instance != null && UIRoot.instance.uiGame != null ? UIRoot.instance.uiGame.dysonEditor : null;
         }
 
         internal static DysonSphere GetSphere(int starIndex)
@@ -295,6 +353,9 @@ namespace SubspaceTransport
         // Amplification.
         private const float BlueRadius = 10f;
         private const float VioletRadius = 20f;
+
+        // A black hole's event horizon and accretion disc, in solar radii.
+        private const float BlackHoleRadius = 1.5f;
 
         // The star's visible surface may reach this fraction of the innermost planet's orbit.
         private const float OrbitClearance = 0.8f;
@@ -335,7 +396,14 @@ namespace SubspaceTransport
 
         internal static bool CanConvert(StarData star)
         {
-            return star != null && (star.type == EStarType.MainSeqStar || star.type == EStarType.GiantStar);
+            return star != null
+                && (star.type == EStarType.MainSeqStar || star.type == EStarType.GiantStar || IsConverted(star));
+        }
+
+        // Converted stars that are hypergiants rather than black holes; only these get the blue-violet tint.
+        internal static bool IsHypergiant(StarData star)
+        {
+            return IsConverted(star) && star.type != EStarType.BlackHole;
         }
 
         internal static bool IsConverted(StarData star)
@@ -360,7 +428,7 @@ namespace SubspaceTransport
                 star.dysonLumino);
         }
 
-        internal static void Apply(StarData star, float targetLumino)
+        internal static void Apply(StarData star, float targetLumino, bool blackHole)
         {
             Snapshot original = Originals.GetValue(star, s => new Snapshot(s));
 
@@ -374,16 +442,20 @@ namespace SubspaceTransport
             star.temperature = Mathf.Max(original.Temperature, TemperatureForMass(star.mass));
             // Hypergiants are a giant-star class of their own: main-sequence stars change class, and the giant
             // materials give the star its swollen look in space and on the star map.
-            star.type = EStarType.GiantStar;
-            star.spectr = ESpectrType.O;
-            star.classFactor = 2f;
+            star.type = blackHole ? EStarType.BlackHole : EStarType.GiantStar;
+            star.spectr = blackHole ? ESpectrType.X : ESpectrType.O;
+            star.classFactor = blackHole ? 0f : 2f;
             star.color = 1f;
             star.lightBalanceRadius = original.LightBalanceRadius * Mathf.Sqrt(luminosityRatio);
             star.habitableRadius = original.HabitableRadius * Mathf.Sqrt(luminosityRatio);
 
             float violetness = GetVioletness(star);
-            float desiredRadius = Mathf.Lerp(BlueRadius, VioletRadius, violetness);
-            star.radius = Mathf.Max(original.Radius, Mathf.Min(desiredRadius, GetRadiusLimit(star)));
+            float desiredRadius = blackHole ? BlackHoleRadius : Mathf.Lerp(BlueRadius, VioletRadius, violetness);
+            star.radius = Mathf.Min(desiredRadius, GetRadiusLimit(star));
+            if (!blackHole)
+            {
+                star.radius = Mathf.Max(original.Radius, star.radius);
+            }
 
             // Sphere layers default to dysonRadius, which must stay outside the bigger star.
             star.dysonRadius = Mathf.Max(
@@ -535,7 +607,7 @@ namespace SubspaceTransport
 
         // The Dyson Sphere editor sizes and colours its star only when its view star changes, so a conversion made
         // while the editor already shows that star needs the editor to run that step again.
-        private static void RefreshEditor(StarData star)
+        internal static void RefreshEditor(StarData star)
         {
             UIDysonEditor editor = UIRoot.instance != null && UIRoot.instance.uiGame != null
                 ? UIRoot.instance.uiGame.dysonEditor
@@ -551,7 +623,7 @@ namespace SubspaceTransport
         internal static void TintEditorStar(UIDysonEditor editor)
         {
             StarData star = editor.selection != null ? editor.selection.viewStar : null;
-            if (!IsConverted(star))
+            if (!IsHypergiant(star))
             {
                 return;
             }
@@ -565,7 +637,7 @@ namespace SubspaceTransport
         internal static void TintStarmapObject(UIStarmapStarObject starObject)
         {
             StarData star = starObject.star;
-            if (!IsConverted(star))
+            if (!IsHypergiant(star))
             {
                 return;
             }
@@ -597,7 +669,7 @@ namespace SubspaceTransport
             }
         }
 
-        private static void RefreshSimulator(StarData star)
+        internal static void RefreshSimulator(StarData star)
         {
             StarSimulator[] simulators = GameMain.universeSimulator != null
                 ? GameMain.universeSimulator.starSimulators
@@ -617,7 +689,7 @@ namespace SubspaceTransport
         internal static void TintSimulator(StarSimulator simulator)
         {
             StarData star = simulator.starData;
-            if (!IsConverted(star))
+            if (!IsHypergiant(star))
             {
                 return;
             }
@@ -719,7 +791,7 @@ namespace SubspaceTransport
     {
         private static void Postfix(StarData __instance, ref string __result)
         {
-            if (StarConversion.IsConverted(__instance))
+            if (StarConversion.IsHypergiant(__instance))
             {
                 __result = StarConversion.GetVioletness(__instance) < 0.5f ? "Blue Hypergiant" : "Violet Hypergiant";
             }
@@ -753,6 +825,49 @@ namespace SubspaceTransport
             {
                 Plugin.ModLogger?.LogError("Hypergiant gravity patch: could not find the star mass in ApplyGravity.");
             }
+        }
+    }
+    // The game's star value check flags giants above 60 M and stars brighter than their mass allows, which is what a
+    // hyperinjected star is. Its own check is repeated here for every other star, and converted stars are skipped.
+    [HarmonyPatch(typeof(ABN_StarValue), "OnGameTick")]
+    internal static class HypergiantAbnormalityPatch
+    {
+        private static bool Prefix(ABN_StarValue __instance, long time)
+        {
+            int checkInterval = Traverse.Create(__instance).Field("checkInterval").GetValue<int>();
+            if (time % checkInterval != __instance.protoId % checkInterval)
+            {
+                return false;
+            }
+
+            DysonSphere[] spheres = GameMain.data.dysonSpheres;
+            for (int i = 0; i < spheres.Length; i++)
+            {
+                if (spheres[i] == null || StarConversion.IsConverted(spheres[i].starData))
+                {
+                    continue;
+                }
+
+                StarData star = spheres[i].starData;
+                float allowed = 1f;
+                if (star.type == EStarType.GiantStar || star.type == EStarType.MainSeqStar)
+                {
+                    if (star.mass > 60f)
+                    {
+                        __instance.abnormalData.TriggerAbnormality(__instance.protoId, 0, 0L, star.id, (long)star.type, (long)(star.mass * 1000f), (long)(star.luminosity * 1000f), 0L);
+                    }
+
+                    allowed = Mathf.Pow(star.mass, 0.7f) * (star.type == EStarType.GiantStar ? 1.6f : 1f) * 1.1f;
+                }
+
+                if (star.luminosity > allowed)
+                {
+                    __instance.abnormalData.TriggerAbnormality(__instance.protoId, 0, 1L, star.id, (long)star.type, (long)(star.mass * 1000f), (long)(star.luminosity * 1000f), (long)allowed);
+                    break;
+                }
+            }
+
+            return false;
         }
     }
 }

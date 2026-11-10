@@ -29,4 +29,15 @@ namespace SubspaceTransport
             return null;
         }
     }
+
+    // Clicking one of those missing cells indexes storage.grids the same way and throws.
+    [HarmonyPatch(typeof(UIStorageGrid), "OnGridMouseDown")]
+    internal static class StorageGridClickFixPatch
+    {
+        private static bool Prefix(UIStorageGrid __instance, int grid)
+        {
+            StorageComponent storage = Traverse.Create(__instance).Field("storage").GetValue<StorageComponent>();
+            return storage == null || (grid >= 0 && grid < storage.size);
+        }
+    }
 }

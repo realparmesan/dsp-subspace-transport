@@ -19,7 +19,8 @@ namespace SubspaceTransport
         private const float StatusHeight = 110f;
         private const int TypeRows = 3;
         private const float StatusTop = TypeRows * RowSpacing;
-        private const float InjectTop = StatusTop + StatusHeight + 4f;
+        private const float TargetTop = StatusTop + StatusHeight + 4f;
+        private const float InjectTop = TargetTop + RowSpacing;
         private const float BodyTop = 30f;
         private const float TopOffset = 50f;
 
@@ -55,6 +56,8 @@ namespace SubspaceTransport
         private static Text _batteryText;
         private static UIButton _hyperButton;
         private static Text _hyperText;
+        private static UIButton _targetButton;
+        private static Text _targetText;
         private static UIButton _injectButton;
         private static Text _injectText;
         private static Text _status;
@@ -85,6 +88,7 @@ namespace SubspaceTransport
             SetButtonState(_dysonButton, _dysonText, "Dyson Sphere", !planned && !hyperPlanned);
             SetButtonState(_batteryButton, _batteryText, "Battery Sphere", planned);
             SetButtonState(_hyperButton, _hyperText, "Hyper Mass Injector", hyperPlanned);
+            UpdateTargetButton(star, hyperPlanned);
             UpdateInjectButton(star, hyperPlanned);
             UpdateCounts(star, planned);
 
@@ -173,6 +177,42 @@ namespace SubspaceTransport
             return result;
         }
 
+        private static void UpdateTargetButton(StarData star, bool hyperPlanned)
+        {
+            _targetButton.gameObject.SetActive(hyperPlanned);
+            if (!hyperPlanned)
+            {
+                return;
+            }
+
+            bool locked = !HyperMassManager.CanChooseTarget(star.index);
+            string value = "Target: " + (HyperMassManager.IsBlackHoleTarget(star.index) ? "Black Hole" : "Hypergiant");
+            if (_targetText.text != value)
+            {
+                _targetText.text = value;
+            }
+
+            _targetText.color = locked ? UnavailableTextColor : NormalTextColor;
+            _targetButton.highlighted = false;
+        }
+
+        private static void OnTargetClicked(int _)
+        {
+            StarData star = GetViewStar();
+            if (star == null || !HyperMassManager.IsPlanned(star.index))
+            {
+                return;
+            }
+
+            if (!HyperMassManager.CanChooseTarget(star.index))
+            {
+                UIRealtimeTip.Popup("This star has already been hyperinjected; its target cannot change.");
+                return;
+            }
+
+            HyperMassManager.SetBlackHoleTarget(star.index, !HyperMassManager.IsBlackHoleTarget(star.index));
+        }
+
         private static void UpdateInjectButton(StarData star, bool hyperPlanned)
         {
             _injectButton.gameObject.SetActive(hyperPlanned);
@@ -197,11 +237,15 @@ namespace SubspaceTransport
             }
 
             int starIndex = star.index;
+            bool blackHole = HyperMassManager.IsBlackHoleTarget(starIndex);
             UIMessageBox.Show(
                 "Hyperinject Mass into the Star",
                 "Inject matter from other galaxies into " + star.displayName + ", raising it to " +
-                HyperMassContent.TargetLuminosity.ToString("0.0#") + " L. The star grows into a hypergiant, " +
-                "and the system's solar power gets stronger. The Hyper Mass Injector sphere is consumed and destroyed, " +
+                HyperMassContent.TargetLuminosity.ToString("0.0#") + " L. " +
+                (blackHole
+                    ? "The star collapses into a black hole,"
+                    : "The star grows into a hypergiant,") +
+                " and the system's solar power gets stronger. The Hyper Mass Injector sphere is consumed and destroyed, " +
                 "and the change cannot be undone.",
                 "取消".Translate(),
                 "确定".Translate(),
@@ -393,12 +437,19 @@ namespace SubspaceTransport
                 "The star's Dyson Sphere must have no structures.";
             _hyperButton.onClick += OnHyperClicked;
 
+            _targetButton = CreateButton(assemblerWindow, _body, "hyper-target", TargetTop, out _targetText);
+            _targetButton.tips.tipTitle = "Injection Target";
+            _targetButton.tips.tipText =
+                "Choose what the star becomes when hyperinjected: a hypergiant, or a black hole with the same " +
+                "luminosity. The choice is fixed once the star has been hyperinjected.";
+            _targetButton.onClick += OnTargetClicked;
+
             _injectButton = CreateButton(assemblerWindow, _body, "hyperinject", InjectTop, out _injectText);
             _injectText.text = "Hyperinject Mass into the Star";
             _injectButton.tips.tipTitle = "Hyperinject Mass into the Star";
             _injectButton.tips.tipText =
                 "Available once this Hyper Mass Injector's sphere generates " + HyperMassManager.ActivationPower +
-                ". Turns the star into a hypergiant at the luminosity your Stellar Hyper Mass research allows. " +
+                ". Turns the star into a hypergiant or black hole (your choice) at the luminosity your Stellar Hyper Mass research allows. " +
                 "Hyperinject again after more Amplification research to grow it further.";
             _injectButton.onClick += OnInjectClicked;
 

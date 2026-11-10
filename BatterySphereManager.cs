@@ -8,7 +8,10 @@ namespace SubspaceTransport
     internal static class BatterySphereManager
     {
         private const int LegacySaveFormatVersion = 1;
-        private const int SaveFormatVersion = 2;
+
+        // Version 2 added the planned flag; version 3 moved the accumulator buffers into each sphere.
+        private const int PlannedSaveFormatVersion = 2;
+        private const int SaveFormatVersion = 3;
         private const int MaximumSavedStars = 10000;
         private const int MaximumProjectRockets = 1000000;
         private const int MaximumBatteryBuffer = 100000;
@@ -24,14 +27,21 @@ namespace SubspaceTransport
             // Set from the Dyson Sphere editor. Rockets only launch to, and output only counts for, planned stars;
             // switching a star back to a Dyson Sphere keeps its rockets for when it is planned again.
             internal bool Planned;
+
+            // Each sphere keeps its own accumulator stock and stored energy.
+            internal int EmptyCount;
+            internal int ChargedCount;
+            internal long EnergyRemainder;
+            internal long PowerTickRemainder;
+
+            internal bool HasStock
+            {
+                get { return RocketCount > 0 || EmptyCount > 0 || ChargedCount > 0 || EnergyRemainder > 0; }
+            }
         }
 
         private static readonly object Sync = new object();
         private static readonly Dictionary<int, StarProject> Projects = new Dictionary<int, StarProject>();
-        private static int _emptyAccumulatorCount;
-        private static int _chargedAccumulatorCount;
-        private static long _energyRemainder;
-        private static long _powerTickRemainder;
         private static long _lastProcessedTick = -1;
 
         internal static bool IsPlanned(int starIndex)
@@ -65,7 +75,7 @@ namespace SubspaceTransport
                 }
 
                 project.Planned = planned;
-                if (!planned && project.RocketCount == 0)
+                if (!planned && !project.HasStock)
                 {
                     Projects.Remove(starIndex);
                 }
@@ -86,8 +96,8 @@ namespace SubspaceTransport
                     ? project.RocketCount
                     : 0;
                 outputWatts = GetSphereWatts(starIndex);
-                emptyCount = _emptyAccumulatorCount;
-                chargedCount = _chargedAccumulatorCount;
+                emptyCount = project != null ? project.EmptyCount : 0;
+                chargedCount = project != null ? project.ChargedCount : 0;
             }
         }
 
@@ -112,17 +122,26 @@ namespace SubspaceTransport
                     return;
                 }
 
-                AdvancePowerUnsafe(tick);
-                _lastProcessedTick = tick;
-
-                // Already-charged batteries stay deliverable when the sphere is producing no power.
-                if (GetTotalOutputWattsUnsafe() > 0L)
+                foreach (KeyValuePair<int, StarProject> entry in Projects)
                 {
-                    CollectEmptyAccumulatorsUnsafe(stationPool, traffic, shipWarpSpeed);
-                    ChargeAccumulatorsUnsafe();
+                    AdvancePowerUnsafe(entry.Key, entry.Value, tick);
                 }
 
-                SupplyChargedAccumulatorsUnsafe(stationPool, traffic, shipWarpSpeed);
+                _lastProcessedTick = tick;
+
+                foreach (KeyValuePair<int, StarProject> entry in Projects)
+                {
+                    StarProject project = entry.Value;
+
+                    // Already-charged batteries stay deliverable when the sphere is producing no power.
+                    if (IsProducing(entry.Key, project))
+                    {
+                        CollectEmptyAccumulatorsUnsafe(project, stationPool, traffic, shipWarpSpeed);
+                        ChargeAccumulatorsUnsafe(project);
+                    }
+
+                    SupplyChargedAccumulatorsUnsafe(project, stationPool, traffic, shipWarpSpeed);
+                }
             }
         }
 
@@ -137,19 +156,18 @@ namespace SubspaceTransport
                     writer.Write(entry.Key);
                     writer.Write(entry.Value.RocketCount);
                     writer.Write(entry.Value.Planned);
+                    writer.Write(entry.Value.EmptyCount);
+                    writer.Write(entry.Value.ChargedCount);
+                    writer.Write(entry.Value.EnergyRemainder);
+                    writer.Write(entry.Value.PowerTickRemainder);
                 }
-
-                writer.Write(_emptyAccumulatorCount);
-                writer.Write(_chargedAccumulatorCount);
-                writer.Write(_energyRemainder);
-                writer.Write(_powerTickRemainder);
             }
         }
 
         internal static void Import(BinaryReader reader)
         {
             int version = reader.ReadInt32();
-            if (version != SaveFormatVersion && version != LegacySaveFormatVersion)
+            if (version < LegacySaveFormatVersion || version > SaveFormatVersion)
             {
                 throw new InvalidDataException("Unsupported Battery Sphere save format: " + version + ".");
             }
@@ -167,15 +185,62 @@ namespace SubspaceTransport
                 int rocketCount = reader.ReadInt32();
 
                 // Saves from before sphere planning existed treat every star with rockets as planned.
-                bool planned = version >= SaveFormatVersion ? reader.ReadBoolean() : rocketCount > 0;
+                bool planned = version >= PlannedSaveFormatVersion ? reader.ReadBoolean() : rocketCount > 0;
                 if (starIndex < 0 || rocketCount < 0 || rocketCount > MaximumProjectRockets)
                 {
                     throw new InvalidDataException("Invalid Battery Sphere project data.");
                 }
 
-                loadedProjects[starIndex] = new StarProject { RocketCount = rocketCount, Planned = planned };
+                StarProject loaded = new StarProject { RocketCount = rocketCount, Planned = planned };
+                if (version >= SaveFormatVersion)
+                {
+                    ReadBuffers(reader, loaded);
+                }
+
+                loadedProjects[starIndex] = loaded;
             }
 
+            if (version < SaveFormatVersion)
+            {
+                // Older saves had one buffer shared by every sphere; give it to the lowest-numbered sphere.
+                StarProject legacy = new StarProject();
+                ReadBuffers(reader, legacy);
+                int target = -1;
+                foreach (int key in loadedProjects.Keys)
+                {
+                    bool better = target < 0
+                        || (loadedProjects[key].Planned && !loadedProjects[target].Planned)
+                        || (loadedProjects[key].Planned == loadedProjects[target].Planned && key < target);
+                    if (better)
+                    {
+                        target = key;
+                    }
+                }
+
+                if (target >= 0)
+                {
+                    StarProject owner = loadedProjects[target];
+                    owner.EmptyCount = legacy.EmptyCount;
+                    owner.ChargedCount = legacy.ChargedCount;
+                    owner.EnergyRemainder = legacy.EnergyRemainder;
+                    owner.PowerTickRemainder = legacy.PowerTickRemainder;
+                }
+            }
+
+            lock (Sync)
+            {
+                Projects.Clear();
+                foreach (KeyValuePair<int, StarProject> entry in loadedProjects)
+                {
+                    Projects.Add(entry.Key, entry.Value);
+                }
+
+                _lastProcessedTick = -1;
+            }
+        }
+
+        private static void ReadBuffers(BinaryReader reader, StarProject project)
+        {
             int emptyCount = reader.ReadInt32();
             int chargedCount = reader.ReadInt32();
             long energyRemainder = reader.ReadInt64();
@@ -188,20 +253,10 @@ namespace SubspaceTransport
                 throw new InvalidDataException("Invalid Battery Sphere accumulator buffer data.");
             }
 
-            lock (Sync)
-            {
-                Projects.Clear();
-                foreach (KeyValuePair<int, StarProject> entry in loadedProjects)
-                {
-                    Projects.Add(entry.Key, entry.Value);
-                }
-
-                _emptyAccumulatorCount = emptyCount;
-                _chargedAccumulatorCount = chargedCount;
-                _energyRemainder = energyRemainder;
-                _powerTickRemainder = tickRemainder;
-                _lastProcessedTick = -1;
-            }
+            project.EmptyCount = emptyCount;
+            project.ChargedCount = chargedCount;
+            project.EnergyRemainder = energyRemainder;
+            project.PowerTickRemainder = tickRemainder;
         }
 
         internal static void Reset()
@@ -209,10 +264,6 @@ namespace SubspaceTransport
             lock (Sync)
             {
                 Projects.Clear();
-                _emptyAccumulatorCount = 0;
-                _chargedAccumulatorCount = 0;
-                _energyRemainder = 0;
-                _powerTickRemainder = 0;
                 _lastProcessedTick = -1;
             }
         }
@@ -228,46 +279,45 @@ namespace SubspaceTransport
             return sphere != null ? sphere.energyGenCurrentTick * TicksPerSecond : 0L;
         }
 
-        private static long GetTotalOutputWattsUnsafe()
+        private static long GetProjectWattsUnsafe(int starIndex, StarProject project)
         {
-            long watts = 0;
-            foreach (KeyValuePair<int, StarProject> entry in Projects)
+            if (!project.Planned || (GameMain.galaxy != null && starIndex >= GameMain.galaxy.starCount))
             {
-                if (!entry.Value.Planned
-                    || (GameMain.galaxy != null && entry.Key >= GameMain.galaxy.starCount))
-                {
-                    continue;
-                }
-
-                watts += GetSphereWatts(entry.Key);
+                return 0L;
             }
 
-            return watts;
+            return GetSphereWatts(starIndex);
         }
 
-        private static void AdvancePowerUnsafe(long tick)
+        private static bool IsProducing(int starIndex, StarProject project)
+        {
+            return GetProjectWattsUnsafe(starIndex, project) > 0L;
+        }
+
+        private static void AdvancePowerUnsafe(int starIndex, StarProject project, long tick)
         {
             if (_lastProcessedTick < 0 || tick <= _lastProcessedTick)
             {
                 return;
             }
 
-            long availablePower = GetTotalOutputWattsUnsafe();
-            if (availablePower <= 0 || _energyRemainder >= MaximumBufferedEnergy)
+            long availablePower = GetProjectWattsUnsafe(starIndex, project);
+            if (availablePower <= 0 || project.EnergyRemainder >= MaximumBufferedEnergy)
             {
                 return;
             }
 
             long usefulTickLimit =
-                (MaximumBufferedEnergy * TicksPerSecond - _powerTickRemainder) / availablePower + 1;
+                (MaximumBufferedEnergy * TicksPerSecond - project.PowerTickRemainder) / availablePower + 1;
             long ticksElapsed = Math.Min(tick - _lastProcessedTick, usefulTickLimit);
-            long energyNumerator = availablePower * ticksElapsed + _powerTickRemainder;
+            long energyNumerator = availablePower * ticksElapsed + project.PowerTickRemainder;
             long generatedEnergy = energyNumerator / TicksPerSecond;
-            _powerTickRemainder = energyNumerator % TicksPerSecond;
-            _energyRemainder = Math.Min(MaximumBufferedEnergy, _energyRemainder + generatedEnergy);
+            project.PowerTickRemainder = energyNumerator % TicksPerSecond;
+            project.EnergyRemainder = Math.Min(MaximumBufferedEnergy, project.EnergyRemainder + generatedEnergy);
         }
 
         private static void CollectEmptyAccumulatorsUnsafe(
+            StarProject project,
             StationComponent[] stationPool,
             TrafficStatistics traffic,
             float shipWarpSpeed)
@@ -288,7 +338,7 @@ namespace SubspaceTransport
                         if (store.itemId != ItemProto.kAccumulator
                             || store.remoteLogic != ELogisticStorage.Supply
                             || store.count <= 0
-                            || _emptyAccumulatorCount >= MaximumBatteryBuffer)
+                            || project.EmptyCount >= MaximumBatteryBuffer)
                         {
                             continue;
                         }
@@ -299,7 +349,7 @@ namespace SubspaceTransport
                         int supplyCount = Math.Min(store.count, store.remoteSupplyCount);
                         int transferCount = Math.Min(
                             GetMaximumTransfer(),
-                            Math.Min(supplyCount, MaximumBatteryBuffer - _emptyAccumulatorCount));
+                            Math.Min(supplyCount, MaximumBatteryBuffer - project.EmptyCount));
                         if (transferCount <= minimumLoad)
                         {
                             continue;
@@ -318,34 +368,35 @@ namespace SubspaceTransport
                         store.inc -= transferredInc;
                         station.storage[storageIndex] = store;
                         station.energy -= energyCost;
-                        _emptyAccumulatorCount += transferCount;
+                        project.EmptyCount += transferCount;
                         traffic?.RegisterPlanetOutputStat(station.planetId, ItemProto.kAccumulator, transferCount);
                     }
                 }
             }
         }
 
-        private static void ChargeAccumulatorsUnsafe()
+        private static void ChargeAccumulatorsUnsafe(StarProject project)
         {
-            if (_emptyAccumulatorCount <= 0 || _chargedAccumulatorCount >= MaximumBatteryBuffer)
+            if (project.EmptyCount <= 0 || project.ChargedCount >= MaximumBatteryBuffer)
             {
                 return;
             }
 
             int chargeCount = (int)Math.Min(
-                Math.Min(_emptyAccumulatorCount, MaximumBatteryBuffer - _chargedAccumulatorCount),
-                _energyRemainder / BatteryEnergyJoules);
+                Math.Min(project.EmptyCount, MaximumBatteryBuffer - project.ChargedCount),
+                project.EnergyRemainder / BatteryEnergyJoules);
             if (chargeCount <= 0)
             {
                 return;
             }
 
-            _emptyAccumulatorCount -= chargeCount;
-            _chargedAccumulatorCount += chargeCount;
-            _energyRemainder -= (long)chargeCount * BatteryEnergyJoules;
+            project.EmptyCount -= chargeCount;
+            project.ChargedCount += chargeCount;
+            project.EnergyRemainder -= (long)chargeCount * BatteryEnergyJoules;
         }
 
         private static void SupplyChargedAccumulatorsUnsafe(
+            StarProject project,
             StationComponent[] stationPool,
             TrafficStatistics traffic,
             float shipWarpSpeed)
@@ -353,7 +404,7 @@ namespace SubspaceTransport
             for (int stationIndex = 1; stationIndex < stationPool.Length; stationIndex++)
             {
                 StationComponent station = stationPool[stationIndex];
-                if (_chargedAccumulatorCount <= 0)
+                if (project.ChargedCount <= 0)
                 {
                     continue;
                 }
@@ -372,12 +423,12 @@ namespace SubspaceTransport
                         if (store.itemId != ItemProto.kAccumulatorFull
                             || store.remoteLogic != ELogisticStorage.Demand
                             || store.remoteDemandCount <= 0
-                            || _chargedAccumulatorCount <= 0)
+                            || project.ChargedCount <= 0)
                         {
                             continue;
                         }
 
-                        int demandCount = Math.Min(store.remoteDemandCount, _chargedAccumulatorCount);
+                        int demandCount = Math.Min(store.remoteDemandCount, project.ChargedCount);
                         int minimumLoad = GetMinimumLoad(station, store.max);
                         if (demandCount <= minimumLoad)
                         {
@@ -385,7 +436,7 @@ namespace SubspaceTransport
                                 station,
                                 "battery-minload",
                                 "wants charged batteries but demand " + demandCount + " (remote demand " +
-                                store.remoteDemandCount + ", pool " + _chargedAccumulatorCount +
+                                store.remoteDemandCount + ", pool " + project.ChargedCount +
                                 ") does not exceed its minimum load " + minimumLoad + ".");
                             continue;
                         }
@@ -407,7 +458,7 @@ namespace SubspaceTransport
                         store.count += transferCount;
                         station.storage[storageIndex] = store;
                         station.energy -= energyCost;
-                        _chargedAccumulatorCount -= transferCount;
+                        project.ChargedCount -= transferCount;
                         traffic?.RegisterPlanetInputStat(
                             station.planetId,
                             ItemProto.kAccumulatorFull,

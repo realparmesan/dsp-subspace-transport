@@ -386,6 +386,9 @@ namespace SubspaceTransport
                 BodyMaterial(simulator).SetColor("_SunGlowColor", run.BodyGlow);
                 HaloMaterial(simulator).color = run.Halo;
                 simulator.sunLight.intensity = run.LightIntensity;
+
+                // Settles on the same colours a loaded game gives the star: SetStarData, then the hypergiant tint.
+                StarConversion.RefreshSimulator(run.Star);
             }
 
             if (run.EditorMaterial != null && run.EditorColors != null)
